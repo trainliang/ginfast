@@ -1,0 +1,166 @@
+package service
+
+import (
+	"testing"
+
+	"gin-fast/app/models"
+)
+
+func TestEduClassServiceCompile(t *testing.T) {
+	setupEduTestDB(t)
+	_ = NewEduClassService()
+}
+
+func TestEduClassServiceRejectsCapacityOverflow(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduClassService()
+	ctx := contextWithTenant(1)
+	seedEduTenantData(t, 1)
+	if err := db.Create(&models.EduStudent{Name: "学生A", Phone: "13800000000", TenantID: 1}).Error; err != nil {
+		t.Fatalf("seed student: %v", err)
+	}
+
+	if err := db.Create(&models.EduClass{Name: "班级", Code: "CL001", ClassType: "group", CourseID: 1, TeacherID: 1, Capacity: 1, TenantID: 1}).Error; err != nil {
+		t.Fatalf("seed class: %v", err)
+	}
+	if err := db.Create(&models.EduClassMember{ClassID: 1, StudentID: 1, Status: "studying", TenantID: 1}).Error; err != nil {
+		t.Fatalf("seed member: %v", err)
+	}
+
+	err := svc.AddMember(ctx, &models.EduClassMember{ClassID: 1, StudentID: 2, Status: "studying", TenantID: 1})
+	if err == nil {
+		t.Fatalf("expected capacity overflow error")
+	}
+}
+
+func TestEduClassServiceRejectsDuplicateActiveMember(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduClassService()
+	ctx := contextWithTenant(1)
+	seedEduTenantData(t, 1)
+	if err := db.Create(&models.EduStudent{Name: "学生A", Phone: "13800000000", TenantID: 1}).Error; err != nil {
+		t.Fatalf("seed student: %v", err)
+	}
+
+	if err := db.Create(&models.EduClass{Name: "班级", Code: "CL001", ClassType: "group", CourseID: 1, TeacherID: 1, Capacity: 3, TenantID: 1}).Error; err != nil {
+		t.Fatalf("seed class: %v", err)
+	}
+	if err := svc.AddMember(ctx, &models.EduClassMember{ClassID: 1, StudentID: 1, Status: "studying", TenantID: 1}); err != nil {
+		t.Fatalf("seed member: %v", err)
+	}
+
+	err := svc.AddMember(ctx, &models.EduClassMember{ClassID: 1, StudentID: 1, Status: "paused", TenantID: 1})
+	if err == nil {
+		t.Fatalf("expected duplicate active member error")
+	}
+}
+
+func TestEduClassServiceRejectsOneOnOneClassType(t *testing.T) {
+	setupEduTestDB(t)
+	svc := NewEduClassService()
+	err := svc.Create(contextWithTenant(1), &models.EduClass{Name: "班级", Code: "CL001", ClassType: "one_to_one", CourseID: 1, TeacherID: 1, Capacity: 1, TenantID: 1})
+	if err == nil {
+		t.Fatalf("expected one-on-one class type rejection")
+	}
+}
+
+func TestEduClassServiceUpdateMemberAllowsSameRecordWithoutCapacityDrop(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduClassService()
+	ctx := contextWithTenant(1)
+	seedEduTenantData(t, 1)
+	if err := db.Create(&models.EduStudent{Name: "学生A", Phone: "13800000000", TenantID: 1}).Error; err != nil {
+		t.Fatalf("seed student: %v", err)
+	}
+
+	if err := db.Create(&models.EduClass{Name: "班级", Code: "CL001", ClassType: "group", CourseID: 1, TeacherID: 1, Capacity: 1, TenantID: 1}).Error; err != nil {
+		t.Fatalf("seed class: %v", err)
+	}
+	member := &models.EduClassMember{ClassID: 1, StudentID: 1, Status: "studying", TenantID: 1}
+	if err := db.Create(member).Error; err != nil {
+		t.Fatalf("seed member: %v", err)
+	}
+
+	updated := &models.EduClassMember{BaseModel: models.BaseModel{ID: member.ID}, ClassID: 1, StudentID: 1, Status: "paused", TenantID: 1}
+	if err := svc.UpdateMember(ctx, updated); err != nil {
+		t.Fatalf("update member: %v", err)
+	}
+
+	var count int64
+	if err := db.Model(&models.EduClassMember{}).Where("class_id = ? AND status IN ?", 1, []string{"studying", "paused"}).Count(&count).Error; err != nil {
+		t.Fatalf("count active members: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected no false capacity drop, got %d", count)
+	}
+}
+
+func TestEduClassServiceImportMemberRowsRollsBackOnError(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduClassService()
+	ctx := contextWithTenant(1)
+	seedEduTenantData(t, 1)
+	if err := db.Create(&models.EduStudent{Name: "学生A", Phone: "13800000000", TenantID: 1}).Error; err != nil {
+		t.Fatalf("seed student: %v", err)
+	}
+
+	if err := db.Create(&models.EduClass{Name: "班级", Code: "CL001", ClassType: "group", CourseID: 1, TeacherID: 1, Capacity: 1, TenantID: 1}).Error; err != nil {
+		t.Fatalf("seed class: %v", err)
+	}
+	if err := db.Create(&models.EduStudent{Name: "学生A", Phone: "13800000000", TenantID: 1}).Error; err != nil {
+		t.Fatalf("seed student: %v", err)
+	}
+
+	result, err := svc.ImportMemberRows(ctx, 1, []models.EduClassMemberImportRow{
+		{ClassID: 1, StudentID: 1, Status: "studying"},
+		{ClassID: 1, StudentID: 1, Status: "bad"},
+	})
+	if err == nil {
+		t.Fatalf("expected import error")
+	}
+	if result == nil || len(result.Errors) == 0 {
+		t.Fatalf("expected row errors")
+	}
+
+	var count int64
+	if err := db.Model(&models.EduClassMember{}).Where("tenant_id = ?", 1).Count(&count).Error; err != nil {
+		t.Fatalf("count members: %v", err)
+	}
+	if count != 0 {
+		t.Fatalf("expected rollback without partial insert, got %d", count)
+	}
+}
+
+func TestEduClassServiceTeacherOptionsDeduplicatesUsers(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduClassService()
+	ctx := contextWithTenant(1)
+	seedEduTenantData(t, 1)
+
+	var user models.User
+	if err := db.Where("username = ?", "teacher-1").First(&user).Error; err != nil {
+		t.Fatalf("load user: %v", err)
+	}
+	if err := db.Create(&models.SysRole{Name: "教师", Status: 1, TenantID: 1}).Error; err != nil {
+		t.Fatalf("seed duplicate role: %v", err)
+	}
+
+	var roles []models.SysRole
+	if err := db.Where("name = ? AND tenant_id = ?", "教师", 1).Find(&roles).Error; err != nil {
+		t.Fatalf("load roles: %v", err)
+	}
+	if len(roles) != 2 {
+		t.Fatalf("expected 2 teacher roles, got %d", len(roles))
+	}
+	if err := db.Create(&models.SysUserRole{UserID: user.ID, RoleID: roles[1].ID}).Error; err != nil {
+		t.Fatalf("seed user-role: %v", err)
+	}
+
+	opts, err := svc.TeacherOptions(ctx, 1)
+	if err != nil {
+		t.Fatalf("teacher options: %v", err)
+	}
+	if len(opts) != 1 {
+		t.Fatalf("expected distinct teacher options, got %d", len(opts))
+	}
+}
