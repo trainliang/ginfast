@@ -111,6 +111,216 @@ INSERT INTO example VALUES (12, '供应链管理', '优化供应链流程和物�
 INSERT INTO example VALUES (13, '质量控制系统', '产品质量检测和流程监控', '2024-01-27 11:45:00', '2024-02-04 13:40:00', NULL, 1, 1);
 INSERT INTO example VALUES (14, '企业门户网站', '企业信息发布和员工协作平台', '2024-01-28 15:20:00', '2024-02-05 17:15:00', NULL, 1, 1);
 INSERT INTO example VALUES (15, '数据分析平台', '大数据处理和分析工具集', '2024-01-29 09:35:00', '2024-02-06 11:30:00', NULL, 1, 1);
+-- Table structure for edu_course
+DROP TABLE IF EXISTS edu_course;
+CREATE TABLE edu_course (
+    id SERIAL,
+    name VARCHAR(100) NOT NULL,
+    code VARCHAR(64) NOT NULL,
+    type VARCHAR(64) DEFAULT '',
+    grade_range VARCHAR(128) DEFAULT '',
+    status SMALLINT DEFAULT 1,
+    sort INTEGER DEFAULT 0,
+    description VARCHAR(500) DEFAULT '',
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    deleted_at TIMESTAMP,
+    created_by INTEGER DEFAULT 0,
+    tenant_id INTEGER DEFAULT 0,
+    PRIMARY KEY (id),
+    CONSTRAINT uk_edu_course_tenant_code UNIQUE (tenant_id, code)
+);
+CREATE INDEX idx_edu_course_deleted_at ON edu_course (deleted_at);
+
+COMMENT ON TABLE edu_course IS '教培课程/项目';
+COMMENT ON COLUMN edu_course.name IS '课程/项目名称';
+COMMENT ON COLUMN edu_course.code IS '课程/项目编码';
+COMMENT ON COLUMN edu_course.type IS '课程/项目类型';
+COMMENT ON COLUMN edu_course.grade_range IS '适用年龄/年级';
+COMMENT ON COLUMN edu_course.status IS '状态 0停用 1启用';
+COMMENT ON COLUMN edu_course.tenant_id IS '租户ID';
+
+-- Table structure for edu_student
+DROP TABLE IF EXISTS edu_student;
+CREATE TABLE edu_student (
+    id SERIAL,
+    name VARCHAR(100) NOT NULL,
+    gender VARCHAR(32) DEFAULT '',
+    birthday TIMESTAMP,
+    phone VARCHAR(64) DEFAULT '',
+    status SMALLINT DEFAULT 1,
+    avatar VARCHAR(255) DEFAULT '',
+    school VARCHAR(128) DEFAULT '',
+    grade VARCHAR(64) DEFAULT '',
+    school_class VARCHAR(64) DEFAULT '',
+    source_channel VARCHAR(64) DEFAULT '',
+    enroll_date TIMESTAMP,
+    health_note VARCHAR(500) DEFAULT '',
+    allergy_note VARCHAR(500) DEFAULT '',
+    emergency_contact VARCHAR(128) DEFAULT '',
+    pickup_note VARCHAR(500) DEFAULT '',
+    remark VARCHAR(500) DEFAULT '',
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    deleted_at TIMESTAMP,
+    created_by INTEGER DEFAULT 0,
+    tenant_id INTEGER DEFAULT 0,
+    PRIMARY KEY (id)
+);
+CREATE INDEX idx_edu_student_deleted_at ON edu_student (deleted_at);
+CREATE INDEX idx_edu_student_tenant_name ON edu_student (tenant_id, name);
+CREATE INDEX idx_edu_student_tenant_phone ON edu_student (tenant_id, phone);
+
+COMMENT ON TABLE edu_student IS '教培学生';
+COMMENT ON COLUMN edu_student.name IS '学生姓名';
+COMMENT ON COLUMN edu_student.gender IS '性别';
+COMMENT ON COLUMN edu_student.status IS '状态';
+COMMENT ON COLUMN edu_student.tenant_id IS '租户ID';
+
+-- Table structure for edu_student_contact
+DROP TABLE IF EXISTS edu_student_contact;
+CREATE TABLE edu_student_contact (
+    id SERIAL,
+    student_id INTEGER NOT NULL,
+    relation VARCHAR(64) DEFAULT '',
+    name VARCHAR(100) NOT NULL,
+    phone VARCHAR(64) NOT NULL,
+    is_primary SMALLINT DEFAULT 0,
+    can_pickup SMALLINT DEFAULT 0,
+    remark VARCHAR(255) DEFAULT '',
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    deleted_at TIMESTAMP,
+    created_by INTEGER DEFAULT 0,
+    tenant_id INTEGER DEFAULT 0,
+    PRIMARY KEY (id)
+);
+CREATE INDEX idx_edu_student_contact_deleted_at ON edu_student_contact (deleted_at);
+CREATE INDEX idx_edu_student_contact_student ON edu_student_contact (tenant_id, student_id);
+CREATE INDEX idx_edu_student_contact_phone ON edu_student_contact (tenant_id, phone);
+
+COMMENT ON TABLE edu_student_contact IS '教培学生联系人';
+
+-- Table structure for edu_class
+DROP TABLE IF EXISTS edu_class;
+CREATE TABLE edu_class (
+    id SERIAL,
+    name VARCHAR(100) NOT NULL,
+    code VARCHAR(64) NOT NULL,
+    class_type VARCHAR(32) NOT NULL,
+    course_id INTEGER NOT NULL,
+    teacher_id INTEGER NOT NULL,
+    room_id INTEGER DEFAULT 0,
+    capacity INTEGER NOT NULL,
+    status SMALLINT DEFAULT 1,
+    start_date TIMESTAMP,
+    end_date TIMESTAMP,
+    remark VARCHAR(500) DEFAULT '',
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    deleted_at TIMESTAMP,
+    created_by INTEGER DEFAULT 0,
+    tenant_id INTEGER DEFAULT 0,
+    PRIMARY KEY (id),
+    CONSTRAINT uk_edu_class_tenant_code UNIQUE (tenant_id, code)
+);
+CREATE INDEX idx_edu_class_deleted_at ON edu_class (deleted_at);
+CREATE INDEX idx_edu_class_tenant_course ON edu_class (tenant_id, course_id);
+CREATE INDEX idx_edu_class_tenant_teacher ON edu_class (tenant_id, teacher_id);
+CREATE INDEX idx_edu_class_tenant_room ON edu_class (tenant_id, room_id);
+
+COMMENT ON TABLE edu_class IS '教培班级';
+COMMENT ON COLUMN edu_class.class_type IS '班级类型 daycare/group';
+
+-- Table structure for edu_class_member
+DROP TABLE IF EXISTS edu_class_member;
+CREATE TABLE edu_class_member (
+    id SERIAL,
+    class_id INTEGER NOT NULL,
+    student_id INTEGER NOT NULL,
+    join_date TIMESTAMP,
+    leave_date TIMESTAMP,
+    status VARCHAR(32) NOT NULL,
+    remark VARCHAR(500) DEFAULT '',
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    deleted_at TIMESTAMP,
+    created_by INTEGER DEFAULT 0,
+    tenant_id INTEGER DEFAULT 0,
+    PRIMARY KEY (id)
+);
+CREATE INDEX idx_edu_class_member_deleted_at ON edu_class_member (deleted_at);
+CREATE INDEX idx_edu_class_member_class ON edu_class_member (tenant_id, class_id);
+CREATE INDEX idx_edu_class_member_student ON edu_class_member (tenant_id, student_id);
+
+COMMENT ON TABLE edu_class_member IS '教培班级成员';
+
+-- Table structure for edu_room
+DROP TABLE IF EXISTS edu_room;
+CREATE TABLE edu_room (
+    id SERIAL,
+    name VARCHAR(100) NOT NULL,
+    code VARCHAR(64) NOT NULL,
+    type VARCHAR(64) DEFAULT '',
+    capacity INTEGER NOT NULL,
+    location VARCHAR(255) DEFAULT '',
+    status SMALLINT DEFAULT 1,
+    remark VARCHAR(500) DEFAULT '',
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    deleted_at TIMESTAMP,
+    created_by INTEGER DEFAULT 0,
+    tenant_id INTEGER DEFAULT 0,
+    PRIMARY KEY (id),
+    CONSTRAINT uk_edu_room_tenant_code UNIQUE (tenant_id, code)
+);
+CREATE INDEX idx_edu_room_deleted_at ON edu_room (deleted_at);
+
+COMMENT ON TABLE edu_room IS '教培场地';
+
+-- Table structure for edu_room_weekly_rule
+DROP TABLE IF EXISTS edu_room_weekly_rule;
+CREATE TABLE edu_room_weekly_rule (
+    id SERIAL,
+    room_id INTEGER NOT NULL,
+    weekday SMALLINT NOT NULL,
+    start_time VARCHAR(5) NOT NULL,
+    end_time VARCHAR(5) NOT NULL,
+    available SMALLINT DEFAULT 1,
+    remark VARCHAR(255) DEFAULT '',
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    deleted_at TIMESTAMP,
+    created_by INTEGER DEFAULT 0,
+    tenant_id INTEGER DEFAULT 0,
+    PRIMARY KEY (id)
+);
+CREATE INDEX idx_edu_room_weekly_rule_deleted_at ON edu_room_weekly_rule (deleted_at);
+CREATE INDEX idx_edu_room_weekly_room ON edu_room_weekly_rule (tenant_id, room_id, weekday);
+
+COMMENT ON TABLE edu_room_weekly_rule IS '教培场地周规则';
+
+-- Table structure for edu_room_exception
+DROP TABLE IF EXISTS edu_room_exception;
+CREATE TABLE edu_room_exception (
+    id SERIAL,
+    room_id INTEGER NOT NULL,
+    exception_date TIMESTAMP NOT NULL,
+    type VARCHAR(32) NOT NULL,
+    start_time VARCHAR(5) DEFAULT '',
+    end_time VARCHAR(5) DEFAULT '',
+    reason VARCHAR(255) DEFAULT '',
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    deleted_at TIMESTAMP,
+    created_by INTEGER DEFAULT 0,
+    tenant_id INTEGER DEFAULT 0,
+    PRIMARY KEY (id)
+);
+CREATE INDEX idx_edu_room_exception_deleted_at ON edu_room_exception (deleted_at);
+CREATE INDEX idx_edu_room_exception_room_date ON edu_room_exception (tenant_id, room_id, exception_date);
+
+COMMENT ON TABLE edu_room_exception IS '教培场地例外';
 -- Table structure for sys_affix
 DROP TABLE IF EXISTS sys_affix;
 CREATE TABLE sys_affix (
@@ -322,6 +532,51 @@ INSERT INTO sys_api VALUES (213, '分片上传初始化', '/api/sysAffix/chunk/i
 INSERT INTO sys_api VALUES (214, '分片上传上传分片', '/api/sysAffix/chunk/upload', 'POST', '文件管理', '2026-04-09 15:37:44', '2026-04-09 15:37:44', NULL, 1);
 INSERT INTO sys_api VALUES (215, '分片上传合并分片', '/api/sysAffix/chunk/merge', 'POST', '文件管理', '2026-04-09 15:39:26', '2026-04-09 15:39:26', NULL, 1);
 INSERT INTO sys_api VALUES (216, '分片上传取消上传', '/api/sysAffix/chunk/cancel', 'DELETE', '文件管理', '2026-04-09 15:43:38', '2026-04-09 15:43:38', NULL, 1);
+INSERT INTO sys_api VALUES (217, '学生列表', '/api/edu/students/list', 'GET', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (218, '学生详情', '/api/edu/students/:id', 'GET', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (219, '新增学生', '/api/edu/students/add', 'POST', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (220, '编辑学生', '/api/edu/students/edit', 'PUT', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (221, '删除学生', '/api/edu/students/delete', 'DELETE', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (222, '导入学生', '/api/edu/students/import', 'POST', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (223, '导出学生', '/api/edu/students/export', 'GET', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (224, '课程/项目列表', '/api/edu/courses/list', 'GET', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (225, '课程/项目选项', '/api/edu/courses/options', 'GET', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (226, '课程/项目详情', '/api/edu/courses/:id', 'GET', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (227, '新增课程/项目', '/api/edu/courses/add', 'POST', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (228, '编辑课程/项目', '/api/edu/courses/edit', 'PUT', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (229, '删除课程/项目', '/api/edu/courses/delete', 'DELETE', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (230, '导入课程/项目', '/api/edu/courses/import', 'POST', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (231, '导出课程/项目', '/api/edu/courses/export', 'GET', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (232, '班级列表', '/api/edu/classes/list', 'GET', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (233, '教师选项', '/api/edu/classes/teacher-options', 'GET', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (234, '班级详情', '/api/edu/classes/:id', 'GET', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (235, '新增班级', '/api/edu/classes/add', 'POST', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (236, '编辑班级', '/api/edu/classes/edit', 'PUT', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (237, '删除班级', '/api/edu/classes/delete', 'DELETE', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (238, '班级成员列表', '/api/edu/classes/:id/members', 'GET', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (239, '新增班级成员', '/api/edu/classes/:id/members/add', 'POST', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (240, '编辑班级成员', '/api/edu/classes/:id/members/edit', 'PUT', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (241, '删除班级成员', '/api/edu/classes/:id/members/delete', 'DELETE', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (242, '导入班级', '/api/edu/classes/import', 'POST', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (243, '导出班级', '/api/edu/classes/export', 'GET', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (244, '导入班级成员', '/api/edu/classes/members/import', 'POST', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (245, '导出班级成员', '/api/edu/classes/members/export', 'GET', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (246, '教室/场地列表', '/api/edu/rooms/list', 'GET', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (247, '教室/场地选项', '/api/edu/rooms/options', 'GET', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (248, '教室/场地详情', '/api/edu/rooms/:id', 'GET', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (249, '新增教室/场地', '/api/edu/rooms/add', 'POST', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (250, '编辑教室/场地', '/api/edu/rooms/edit', 'PUT', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (251, '删除教室/场地', '/api/edu/rooms/delete', 'DELETE', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (252, '场地周规则列表', '/api/edu/rooms/:id/weekly-rules', 'GET', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (253, '保存场地周规则', '/api/edu/rooms/:id/weekly-rules/save', 'POST', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (254, '场地例外列表', '/api/edu/rooms/:id/exceptions', 'GET', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (255, '新增场地例外', '/api/edu/rooms/:id/exceptions/add', 'POST', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (256, '编辑场地例外', '/api/edu/rooms/:id/exceptions/edit', 'PUT', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (257, '删除场地例外', '/api/edu/rooms/:id/exceptions/delete', 'DELETE', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (258, '导入教室/场地', '/api/edu/rooms/import', 'POST', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (259, '导出教室/场地', '/api/edu/rooms/export', 'GET', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (260, '导入场地周规则', '/api/edu/rooms/weekly-rules/import', 'POST', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_api VALUES (261, '导入场地例外', '/api/edu/rooms/exceptions/import', 'POST', '教培管理', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
 -- Table structure for sys_casbin_rule
 DROP TABLE IF EXISTS sys_casbin_rule;
 CREATE TABLE sys_casbin_rule (
@@ -524,6 +779,96 @@ INSERT INTO sys_casbin_rule VALUES (7530, 'p', 'role_2', '/api/sysDepartment/add
 INSERT INTO sys_casbin_rule VALUES (7519, 'p', 'role_2', '/api/sysDepartment/delete', 'DELETE', '*', '', '');
 INSERT INTO sys_casbin_rule VALUES (7560, 'p', 'role_2', '/api/sysDepartment/edit', 'PUT', '*', '', '');
 INSERT INTO sys_casbin_rule VALUES (7510, 'p', 'role_2', '/api/sysDepartment/getDivision', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7561, 'p', 'role_1', '/api/edu/students/list', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7562, 'p', 'role_1', '/api/edu/students/:id', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7563, 'p', 'role_1', '/api/edu/students/add', 'POST', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7564, 'p', 'role_1', '/api/edu/students/edit', 'PUT', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7565, 'p', 'role_1', '/api/edu/students/delete', 'DELETE', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7566, 'p', 'role_1', '/api/edu/students/import', 'POST', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7567, 'p', 'role_1', '/api/edu/students/export', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7568, 'p', 'role_1', '/api/edu/courses/list', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7569, 'p', 'role_1', '/api/edu/courses/options', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7570, 'p', 'role_1', '/api/edu/courses/:id', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7571, 'p', 'role_1', '/api/edu/courses/add', 'POST', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7572, 'p', 'role_1', '/api/edu/courses/edit', 'PUT', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7573, 'p', 'role_1', '/api/edu/courses/delete', 'DELETE', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7574, 'p', 'role_1', '/api/edu/courses/import', 'POST', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7575, 'p', 'role_1', '/api/edu/courses/export', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7576, 'p', 'role_1', '/api/edu/classes/list', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7577, 'p', 'role_1', '/api/edu/classes/teacher-options', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7578, 'p', 'role_1', '/api/edu/classes/:id', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7579, 'p', 'role_1', '/api/edu/classes/add', 'POST', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7580, 'p', 'role_1', '/api/edu/classes/edit', 'PUT', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7581, 'p', 'role_1', '/api/edu/classes/delete', 'DELETE', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7582, 'p', 'role_1', '/api/edu/classes/:id/members', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7583, 'p', 'role_1', '/api/edu/classes/:id/members/add', 'POST', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7584, 'p', 'role_1', '/api/edu/classes/:id/members/edit', 'PUT', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7585, 'p', 'role_1', '/api/edu/classes/:id/members/delete', 'DELETE', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7586, 'p', 'role_1', '/api/edu/classes/import', 'POST', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7587, 'p', 'role_1', '/api/edu/classes/export', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7588, 'p', 'role_1', '/api/edu/classes/members/import', 'POST', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7589, 'p', 'role_1', '/api/edu/classes/members/export', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7590, 'p', 'role_1', '/api/edu/rooms/list', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7591, 'p', 'role_1', '/api/edu/rooms/options', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7592, 'p', 'role_1', '/api/edu/rooms/:id', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7593, 'p', 'role_1', '/api/edu/rooms/add', 'POST', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7594, 'p', 'role_1', '/api/edu/rooms/edit', 'PUT', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7595, 'p', 'role_1', '/api/edu/rooms/delete', 'DELETE', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7596, 'p', 'role_1', '/api/edu/rooms/:id/weekly-rules', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7597, 'p', 'role_1', '/api/edu/rooms/:id/weekly-rules/save', 'POST', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7598, 'p', 'role_1', '/api/edu/rooms/:id/exceptions', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7599, 'p', 'role_1', '/api/edu/rooms/:id/exceptions/add', 'POST', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7600, 'p', 'role_1', '/api/edu/rooms/:id/exceptions/edit', 'PUT', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7601, 'p', 'role_1', '/api/edu/rooms/:id/exceptions/delete', 'DELETE', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7602, 'p', 'role_1', '/api/edu/rooms/import', 'POST', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7603, 'p', 'role_1', '/api/edu/rooms/export', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7604, 'p', 'role_1', '/api/edu/rooms/weekly-rules/import', 'POST', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7605, 'p', 'role_1', '/api/edu/rooms/exceptions/import', 'POST', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7606, 'p', 'role_2', '/api/edu/students/list', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7607, 'p', 'role_2', '/api/edu/students/:id', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7608, 'p', 'role_2', '/api/edu/students/add', 'POST', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7609, 'p', 'role_2', '/api/edu/students/edit', 'PUT', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7610, 'p', 'role_2', '/api/edu/students/delete', 'DELETE', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7611, 'p', 'role_2', '/api/edu/students/import', 'POST', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7612, 'p', 'role_2', '/api/edu/students/export', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7613, 'p', 'role_2', '/api/edu/courses/list', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7614, 'p', 'role_2', '/api/edu/courses/options', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7615, 'p', 'role_2', '/api/edu/courses/:id', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7616, 'p', 'role_2', '/api/edu/courses/add', 'POST', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7617, 'p', 'role_2', '/api/edu/courses/edit', 'PUT', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7618, 'p', 'role_2', '/api/edu/courses/delete', 'DELETE', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7619, 'p', 'role_2', '/api/edu/courses/import', 'POST', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7620, 'p', 'role_2', '/api/edu/courses/export', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7621, 'p', 'role_2', '/api/edu/classes/list', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7622, 'p', 'role_2', '/api/edu/classes/teacher-options', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7623, 'p', 'role_2', '/api/edu/classes/:id', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7624, 'p', 'role_2', '/api/edu/classes/add', 'POST', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7625, 'p', 'role_2', '/api/edu/classes/edit', 'PUT', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7626, 'p', 'role_2', '/api/edu/classes/delete', 'DELETE', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7627, 'p', 'role_2', '/api/edu/classes/:id/members', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7628, 'p', 'role_2', '/api/edu/classes/:id/members/add', 'POST', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7629, 'p', 'role_2', '/api/edu/classes/:id/members/edit', 'PUT', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7630, 'p', 'role_2', '/api/edu/classes/:id/members/delete', 'DELETE', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7631, 'p', 'role_2', '/api/edu/classes/import', 'POST', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7632, 'p', 'role_2', '/api/edu/classes/export', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7633, 'p', 'role_2', '/api/edu/classes/members/import', 'POST', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7634, 'p', 'role_2', '/api/edu/classes/members/export', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7635, 'p', 'role_2', '/api/edu/rooms/list', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7636, 'p', 'role_2', '/api/edu/rooms/options', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7637, 'p', 'role_2', '/api/edu/rooms/:id', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7638, 'p', 'role_2', '/api/edu/rooms/add', 'POST', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7639, 'p', 'role_2', '/api/edu/rooms/edit', 'PUT', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7640, 'p', 'role_2', '/api/edu/rooms/delete', 'DELETE', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7641, 'p', 'role_2', '/api/edu/rooms/:id/weekly-rules', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7642, 'p', 'role_2', '/api/edu/rooms/:id/weekly-rules/save', 'POST', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7643, 'p', 'role_2', '/api/edu/rooms/:id/exceptions', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7644, 'p', 'role_2', '/api/edu/rooms/:id/exceptions/add', 'POST', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7645, 'p', 'role_2', '/api/edu/rooms/:id/exceptions/edit', 'PUT', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7646, 'p', 'role_2', '/api/edu/rooms/:id/exceptions/delete', 'DELETE', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7647, 'p', 'role_2', '/api/edu/rooms/import', 'POST', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7648, 'p', 'role_2', '/api/edu/rooms/export', 'GET', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7649, 'p', 'role_2', '/api/edu/rooms/weekly-rules/import', 'POST', '*', '', '');
+INSERT INTO sys_casbin_rule VALUES (7650, 'p', 'role_2', '/api/edu/rooms/exceptions/import', 'POST', '*', '', '');
 INSERT INTO sys_casbin_rule VALUES (7547, 'p', 'role_2', '/api/sysDict/add', 'POST', '*', '', '');
 INSERT INTO sys_casbin_rule VALUES (7520, 'p', 'role_2', '/api/sysDict/delete', 'DELETE', '*', '', '');
 INSERT INTO sys_casbin_rule VALUES (7531, 'p', 'role_2', '/api/sysDict/edit', 'PUT', '*', '', '');
@@ -647,6 +992,15 @@ INSERT INTO sys_dict VALUES (1, '性别', 'gender', '1', '这是一个性别字�
 INSERT INTO sys_dict VALUES (2, '状态', 'status', '1', '状态字段可以用这个', '2024-07-01 10:00:00', NULL, NULL, 1);
 INSERT INTO sys_dict VALUES (3, '岗位', 'post', '1', '岗位字段', '2024-07-01 10:00:00', NULL, NULL, 1);
 INSERT INTO sys_dict VALUES (4, '任务状态', 'taskStatus', '1', '任务状态字段可以用它', '2024-07-01 10:00:00', NULL, NULL, 1);
+INSERT INTO sys_dict VALUES (101, '学生状态', 'edu_student_status', 1, '教培学生在读状态', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_dict VALUES (102, '教培性别', 'edu_gender', 1, '教培学生性别', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_dict VALUES (103, '年级', 'edu_grade', 1, '学生年级', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_dict VALUES (104, '来源渠道', 'edu_source_channel', 1, '学生来源渠道', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_dict VALUES (105, '课程/项目类型', 'edu_course_type', 1, '课程或托管项目类型', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_dict VALUES (106, '班级类型', 'edu_class_type', 1, '托管班或班课，不包含一对一预约', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_dict VALUES (107, '班级成员状态', 'edu_class_member_status', 1, '班级学员状态', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_dict VALUES (108, '场地类型', 'edu_room_type', 1, '教室或场地类型', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_dict VALUES (109, '场地例外类型', 'edu_room_exception_type', 1, '场地开放或停用例外', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
 -- Table structure for sys_dict_item
 DROP TABLE IF EXISTS sys_dict_item;
 CREATE TABLE sys_dict_item (
@@ -674,6 +1028,42 @@ INSERT INTO sys_dict_item VALUES (35, '普通职员', '5', '1', 3);
 INSERT INTO sys_dict_item VALUES (36, '其它', '999', '1', 3);
 INSERT INTO sys_dict_item VALUES (41, '失败', '0', '1', 4);
 INSERT INTO sys_dict_item VALUES (42, '成功', '1', '1', 4);
+INSERT INTO sys_dict_item VALUES (10101, '在读', '1', 1, 101);
+INSERT INTO sys_dict_item VALUES (10102, '暂停', '0', 1, 101);
+INSERT INTO sys_dict_item VALUES (10103, '退学', '2', 1, 101);
+INSERT INTO sys_dict_item VALUES (10201, '未知', 'unknown', 1, 102);
+INSERT INTO sys_dict_item VALUES (10202, '男', 'male', 1, 102);
+INSERT INTO sys_dict_item VALUES (10203, '女', 'female', 1, 102);
+INSERT INTO sys_dict_item VALUES (10301, '幼儿园小班', 'k1', 1, 103);
+INSERT INTO sys_dict_item VALUES (10302, '幼儿园中班', 'k2', 1, 103);
+INSERT INTO sys_dict_item VALUES (10303, '幼儿园大班', 'k3', 1, 103);
+INSERT INTO sys_dict_item VALUES (10304, '一年级', 'g1', 1, 103);
+INSERT INTO sys_dict_item VALUES (10305, '二年级', 'g2', 1, 103);
+INSERT INTO sys_dict_item VALUES (10306, '三年级', 'g3', 1, 103);
+INSERT INTO sys_dict_item VALUES (10307, '四年级', 'g4', 1, 103);
+INSERT INTO sys_dict_item VALUES (10308, '五年级', 'g5', 1, 103);
+INSERT INTO sys_dict_item VALUES (10309, '六年级', 'g6', 1, 103);
+INSERT INTO sys_dict_item VALUES (10401, '自然到访', 'walk_in', 1, 104);
+INSERT INTO sys_dict_item VALUES (10402, '转介绍', 'referral', 1, 104);
+INSERT INTO sys_dict_item VALUES (10403, '线上咨询', 'online', 1, 104);
+INSERT INTO sys_dict_item VALUES (10404, '活动报名', 'campaign', 1, 104);
+INSERT INTO sys_dict_item VALUES (10405, '其他', 'other', 1, 104);
+INSERT INTO sys_dict_item VALUES (10501, '托管', 'daycare', 1, 105);
+INSERT INTO sys_dict_item VALUES (10502, '艺术', 'art', 1, 105);
+INSERT INTO sys_dict_item VALUES (10503, '体育', 'sport', 1, 105);
+INSERT INTO sys_dict_item VALUES (10504, '其他', 'other', 1, 105);
+INSERT INTO sys_dict_item VALUES (10601, '托管班', 'daycare', 1, 106);
+INSERT INTO sys_dict_item VALUES (10602, '班课', 'group', 1, 106);
+INSERT INTO sys_dict_item VALUES (10701, '在读', 'studying', 1, 107);
+INSERT INTO sys_dict_item VALUES (10702, '暂停', 'paused', 1, 107);
+INSERT INTO sys_dict_item VALUES (10703, '退班', 'left', 1, 107);
+INSERT INTO sys_dict_item VALUES (10801, '教室', 'classroom', 1, 108);
+INSERT INTO sys_dict_item VALUES (10802, '托管室', 'daycare_room', 1, 108);
+INSERT INTO sys_dict_item VALUES (10803, '球场', 'court', 1, 108);
+INSERT INTO sys_dict_item VALUES (10804, '舞蹈室', 'dance_room', 1, 108);
+INSERT INTO sys_dict_item VALUES (10805, '其他', 'other', 1, 108);
+INSERT INTO sys_dict_item VALUES (10901, '特殊开放', 'open', 1, 109);
+INSERT INTO sys_dict_item VALUES (10902, '停用', 'closed', 1, 109);
 -- Table structure for sys_gen
 DROP TABLE IF EXISTS sys_gen;
 CREATE TABLE sys_gen (
@@ -997,6 +1387,33 @@ INSERT INTO sys_menu VALUES (140346, 140342, '', '', '', '', '执行一次', '0'
 INSERT INTO sys_menu VALUES (140347, 140341, '/system/joblog', 'SystemJoblog', '', 'system/sysjobresults/sysjobresultslist', 'joblog', '0', '0', '0', '1', '0', '', '0', '', 'IconHistory', 0, '2', '0', '', '2026-02-11 11:41:27', '2026-02-11 11:41:27', NULL, 1);
 INSERT INTO sys_menu VALUES (140348, 140347, '', '', '', '', '删除', '0', '0', '0', '1', '0', '', '0', '', '', 0, '3', '0', 'system:sysjobresults:delete', '2026-02-11 11:45:18', '2026-02-11 11:45:18', NULL, 1);
 INSERT INTO sys_menu VALUES (140349, 140239, '', '', '', '', '大文件上传', '0', '0', '0', '1', '0', '', '0', '', '', 0, '3', '0', 'system:affix:bigupload', '2026-04-09 15:47:39', '2026-04-09 15:47:39', NULL, 1);
+INSERT INTO sys_menu VALUES (140350, 0, '/edu', 'Edu', '', '', '教培管理', 0, 0, 0, 1, 0, '', 0, 'classify', '', 3, 1, 0, '', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_menu VALUES (140351, 140350, '/edu/student', 'EduStudent', '', 'edu/student/student', '学生管理', 0, 0, 0, 1, 0, '', 0, '', 'IconUser', 1, 2, 0, 'edu:student:list', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_menu VALUES (140352, 140350, '/edu/course', 'EduCourse', '', 'edu/course/course', '课程/项目管理', 0, 0, 0, 1, 0, '', 0, '', 'IconBook', 2, 2, 0, 'edu:course:list', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_menu VALUES (140353, 140350, '/edu/class', 'EduClass', '', 'edu/class/class', '班级管理', 0, 0, 0, 1, 0, '', 0, '', 'IconUserGroup', 3, 2, 0, 'edu:class:list', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_menu VALUES (140354, 140350, '/edu/room', 'EduRoom', '', 'edu/room/room', '教室/场地管理', 0, 0, 0, 1, 0, '', 0, '', 'IconHome', 4, 2, 0, 'edu:room:list', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_menu VALUES (140360, 140351, '', '', '', '', '新增学生', 0, 0, 0, 1, 0, '', 0, '', '', 1, 3, 0, 'edu:student:add', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_menu VALUES (140361, 140351, '', '', '', '', '编辑学生', 0, 0, 0, 1, 0, '', 0, '', '', 2, 3, 0, 'edu:student:edit', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_menu VALUES (140362, 140351, '', '', '', '', '删除学生', 0, 0, 0, 1, 0, '', 0, '', '', 3, 3, 0, 'edu:student:delete', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_menu VALUES (140363, 140351, '', '', '', '', '导入学生', 0, 0, 0, 1, 0, '', 0, '', '', 4, 3, 0, 'edu:student:import', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_menu VALUES (140364, 140351, '', '', '', '', '导出学生', 0, 0, 0, 1, 0, '', 0, '', '', 5, 3, 0, 'edu:student:export', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_menu VALUES (140365, 140352, '', '', '', '', '新增课程/项目', 0, 0, 0, 1, 0, '', 0, '', '', 1, 3, 0, 'edu:course:add', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_menu VALUES (140366, 140352, '', '', '', '', '编辑课程/项目', 0, 0, 0, 1, 0, '', 0, '', '', 2, 3, 0, 'edu:course:edit', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_menu VALUES (140367, 140352, '', '', '', '', '删除课程/项目', 0, 0, 0, 1, 0, '', 0, '', '', 3, 3, 0, 'edu:course:delete', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_menu VALUES (140368, 140352, '', '', '', '', '导入课程/项目', 0, 0, 0, 1, 0, '', 0, '', '', 4, 3, 0, 'edu:course:import', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_menu VALUES (140369, 140352, '', '', '', '', '导出课程/项目', 0, 0, 0, 1, 0, '', 0, '', '', 5, 3, 0, 'edu:course:export', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_menu VALUES (140370, 140353, '', '', '', '', '新增班级', 0, 0, 0, 1, 0, '', 0, '', '', 1, 3, 0, 'edu:class:add', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_menu VALUES (140371, 140353, '', '', '', '', '编辑班级', 0, 0, 0, 1, 0, '', 0, '', '', 2, 3, 0, 'edu:class:edit', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_menu VALUES (140372, 140353, '', '', '', '', '删除班级', 0, 0, 0, 1, 0, '', 0, '', '', 3, 3, 0, 'edu:class:delete', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_menu VALUES (140373, 140353, '', '', '', '', '导入班级', 0, 0, 0, 1, 0, '', 0, '', '', 4, 3, 0, 'edu:class:import', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_menu VALUES (140374, 140353, '', '', '', '', '导出班级', 0, 0, 0, 1, 0, '', 0, '', '', 5, 3, 0, 'edu:class:export', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_menu VALUES (140375, 140353, '', '', '', '', '班级成员', 0, 0, 0, 1, 0, '', 0, '', '', 6, 3, 0, 'edu:class:member', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_menu VALUES (140380, 140354, '', '', '', '', '新增教室/场地', 0, 0, 0, 1, 0, '', 0, '', '', 1, 3, 0, 'edu:room:add', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_menu VALUES (140381, 140354, '', '', '', '', '编辑教室/场地', 0, 0, 0, 1, 0, '', 0, '', '', 2, 3, 0, 'edu:room:edit', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_menu VALUES (140382, 140354, '', '', '', '', '删除教室/场地', 0, 0, 0, 1, 0, '', 0, '', '', 3, 3, 0, 'edu:room:delete', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_menu VALUES (140383, 140354, '', '', '', '', '导入教室/场地', 0, 0, 0, 1, 0, '', 0, '', '', 4, 3, 0, 'edu:room:import', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_menu VALUES (140384, 140354, '', '', '', '', '导出教室/场地', 0, 0, 0, 1, 0, '', 0, '', '', 5, 3, 0, 'edu:room:export', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
+INSERT INTO sys_menu VALUES (140385, 140354, '', '', '', '', '场地开放时间', 0, 0, 0, 1, 0, '', 0, '', '', 6, 3, 0, 'edu:room:time', '2026-05-10 10:00:00', '2026-05-10 10:00:00', NULL, 1);
 -- Table structure for sys_menu_api
 DROP TABLE IF EXISTS sys_menu_api;
 CREATE TABLE sys_menu_api (
@@ -1119,6 +1536,51 @@ INSERT INTO sys_menu_api VALUES (140349, 213);
 INSERT INTO sys_menu_api VALUES (140349, 214);
 INSERT INTO sys_menu_api VALUES (140349, 215);
 INSERT INTO sys_menu_api VALUES (140349, 216);
+INSERT INTO sys_menu_api VALUES (140351, 217);
+INSERT INTO sys_menu_api VALUES (140351, 218);
+INSERT INTO sys_menu_api VALUES (140360, 219);
+INSERT INTO sys_menu_api VALUES (140361, 220);
+INSERT INTO sys_menu_api VALUES (140362, 221);
+INSERT INTO sys_menu_api VALUES (140363, 222);
+INSERT INTO sys_menu_api VALUES (140364, 223);
+INSERT INTO sys_menu_api VALUES (140352, 224);
+INSERT INTO sys_menu_api VALUES (140352, 225);
+INSERT INTO sys_menu_api VALUES (140352, 226);
+INSERT INTO sys_menu_api VALUES (140365, 227);
+INSERT INTO sys_menu_api VALUES (140366, 228);
+INSERT INTO sys_menu_api VALUES (140367, 229);
+INSERT INTO sys_menu_api VALUES (140368, 230);
+INSERT INTO sys_menu_api VALUES (140369, 231);
+INSERT INTO sys_menu_api VALUES (140353, 232);
+INSERT INTO sys_menu_api VALUES (140353, 233);
+INSERT INTO sys_menu_api VALUES (140353, 234);
+INSERT INTO sys_menu_api VALUES (140353, 238);
+INSERT INTO sys_menu_api VALUES (140370, 235);
+INSERT INTO sys_menu_api VALUES (140371, 236);
+INSERT INTO sys_menu_api VALUES (140372, 237);
+INSERT INTO sys_menu_api VALUES (140373, 242);
+INSERT INTO sys_menu_api VALUES (140374, 243);
+INSERT INTO sys_menu_api VALUES (140375, 239);
+INSERT INTO sys_menu_api VALUES (140375, 240);
+INSERT INTO sys_menu_api VALUES (140375, 241);
+INSERT INTO sys_menu_api VALUES (140375, 244);
+INSERT INTO sys_menu_api VALUES (140375, 245);
+INSERT INTO sys_menu_api VALUES (140354, 246);
+INSERT INTO sys_menu_api VALUES (140354, 247);
+INSERT INTO sys_menu_api VALUES (140354, 248);
+INSERT INTO sys_menu_api VALUES (140354, 252);
+INSERT INTO sys_menu_api VALUES (140354, 254);
+INSERT INTO sys_menu_api VALUES (140380, 249);
+INSERT INTO sys_menu_api VALUES (140381, 250);
+INSERT INTO sys_menu_api VALUES (140382, 251);
+INSERT INTO sys_menu_api VALUES (140383, 258);
+INSERT INTO sys_menu_api VALUES (140384, 259);
+INSERT INTO sys_menu_api VALUES (140385, 253);
+INSERT INTO sys_menu_api VALUES (140385, 255);
+INSERT INTO sys_menu_api VALUES (140385, 256);
+INSERT INTO sys_menu_api VALUES (140385, 257);
+INSERT INTO sys_menu_api VALUES (140385, 260);
+INSERT INTO sys_menu_api VALUES (140385, 261);
 -- Table structure for sys_operation_logs
 DROP TABLE IF EXISTS sys_operation_logs;
 CREATE TABLE sys_operation_logs (
@@ -1343,6 +1805,60 @@ INSERT INTO sys_role_menu VALUES (2, 140336);
 INSERT INTO sys_role_menu VALUES (2, 140338);
 INSERT INTO sys_role_menu VALUES (2, 140339);
 INSERT INTO sys_role_menu VALUES (2, 140340);
+INSERT INTO sys_role_menu VALUES (1, 140350);
+INSERT INTO sys_role_menu VALUES (1, 140351);
+INSERT INTO sys_role_menu VALUES (1, 140352);
+INSERT INTO sys_role_menu VALUES (1, 140353);
+INSERT INTO sys_role_menu VALUES (1, 140354);
+INSERT INTO sys_role_menu VALUES (1, 140360);
+INSERT INTO sys_role_menu VALUES (1, 140361);
+INSERT INTO sys_role_menu VALUES (1, 140362);
+INSERT INTO sys_role_menu VALUES (1, 140363);
+INSERT INTO sys_role_menu VALUES (1, 140364);
+INSERT INTO sys_role_menu VALUES (1, 140365);
+INSERT INTO sys_role_menu VALUES (1, 140366);
+INSERT INTO sys_role_menu VALUES (1, 140367);
+INSERT INTO sys_role_menu VALUES (1, 140368);
+INSERT INTO sys_role_menu VALUES (1, 140369);
+INSERT INTO sys_role_menu VALUES (1, 140370);
+INSERT INTO sys_role_menu VALUES (1, 140371);
+INSERT INTO sys_role_menu VALUES (1, 140372);
+INSERT INTO sys_role_menu VALUES (1, 140373);
+INSERT INTO sys_role_menu VALUES (1, 140374);
+INSERT INTO sys_role_menu VALUES (1, 140375);
+INSERT INTO sys_role_menu VALUES (1, 140380);
+INSERT INTO sys_role_menu VALUES (1, 140381);
+INSERT INTO sys_role_menu VALUES (1, 140382);
+INSERT INTO sys_role_menu VALUES (1, 140383);
+INSERT INTO sys_role_menu VALUES (1, 140384);
+INSERT INTO sys_role_menu VALUES (1, 140385);
+INSERT INTO sys_role_menu VALUES (2, 140350);
+INSERT INTO sys_role_menu VALUES (2, 140351);
+INSERT INTO sys_role_menu VALUES (2, 140352);
+INSERT INTO sys_role_menu VALUES (2, 140353);
+INSERT INTO sys_role_menu VALUES (2, 140354);
+INSERT INTO sys_role_menu VALUES (2, 140360);
+INSERT INTO sys_role_menu VALUES (2, 140361);
+INSERT INTO sys_role_menu VALUES (2, 140362);
+INSERT INTO sys_role_menu VALUES (2, 140363);
+INSERT INTO sys_role_menu VALUES (2, 140364);
+INSERT INTO sys_role_menu VALUES (2, 140365);
+INSERT INTO sys_role_menu VALUES (2, 140366);
+INSERT INTO sys_role_menu VALUES (2, 140367);
+INSERT INTO sys_role_menu VALUES (2, 140368);
+INSERT INTO sys_role_menu VALUES (2, 140369);
+INSERT INTO sys_role_menu VALUES (2, 140370);
+INSERT INTO sys_role_menu VALUES (2, 140371);
+INSERT INTO sys_role_menu VALUES (2, 140372);
+INSERT INTO sys_role_menu VALUES (2, 140373);
+INSERT INTO sys_role_menu VALUES (2, 140374);
+INSERT INTO sys_role_menu VALUES (2, 140375);
+INSERT INTO sys_role_menu VALUES (2, 140380);
+INSERT INTO sys_role_menu VALUES (2, 140381);
+INSERT INTO sys_role_menu VALUES (2, 140382);
+INSERT INTO sys_role_menu VALUES (2, 140383);
+INSERT INTO sys_role_menu VALUES (2, 140384);
+INSERT INTO sys_role_menu VALUES (2, 140385);
 -- Table structure for sys_tenants
 DROP TABLE IF EXISTS sys_tenants;
 CREATE TABLE sys_tenants (
@@ -1371,7 +1887,7 @@ COMMENT ON COLUMN sys_tenants.created_by IS '创建人';
 COMMENT ON COLUMN sys_tenants.name IS '租户名称';
 
 -- Records of sys_tenants
-INSERT INTO sys_tenants VALUES (1, '2025-11-03 11:16:45', '2026-01-09 16:31:23', NULL, 1, '测试租户1', 'dom1', '', 1, '', '', '1,10,1001,140214,140215,140216,1002,140218,140219,140220,140221,140244,1003,140222,140223,140224,140225,140257,140258,1004,140229,140230,140231,1006,140255,140256,1007,140252,140264,140239,140240,140241,140242,140243,140254');
+INSERT INTO sys_tenants VALUES (1, '2025-11-03 11:16:45', '2026-01-09 16:31:23', NULL, 1, '测试租户1', 'dom1', '', 1, '', '', '1,10,1001,140214,140215,140216,1002,140218,140219,140220,140221,140244,1003,140222,140223,140224,140225,140257,140258,1004,140229,140230,140231,1006,140255,140256,1007,140252,140264,140239,140240,140241,140242,140243,140254,140350,140351,140352,140353,140354');
 -- Table structure for sys_users
 DROP TABLE IF EXISTS sys_users;
 CREATE TABLE sys_users (
@@ -1469,20 +1985,20 @@ SELECT setval('sys_department_id_seq', 1, true);
 SELECT setval('sys_gen_id_seq', 24, true);
 -- 表 demo_teacher 的列 id 没有数据，序列 demo_teacher_id_seq 将保持默认起始值
 -- 表 sys_affix_chunk 的列 id 没有数据，序列 sys_affix_chunk_id_seq 将保持默认起始值
-SELECT setval('sys_dict_id_seq', 4, true);
-SELECT setval('sys_dict_item_id_seq', 42, true);
+SELECT setval('sys_dict_id_seq', 109, true);
+SELECT setval('sys_dict_item_id_seq', 10902, true);
 -- 表 sys_operation_logs 的列 id 没有数据，序列 sys_operation_logs_id_seq 将保持默认起始值
 -- 表 sys_job_results 的列 id 没有数据，序列 sys_job_results_id_seq 将保持默认起始值
 SELECT setval('sys_gen_field_id_seq', 213, true);
-SELECT setval('sys_menu_id_seq', 140349, true);
+SELECT setval('sys_menu_id_seq', 140385, true);
 SELECT setval('sys_tenants_id_seq', 1, true);
 SELECT setval('sys_role_id_seq', 2, true);
 SELECT setval('sys_users_id_seq', 4, true);
 -- 表 demo_students 的列 student_id 没有数据，序列 demo_students_student_id_seq 将保持默认起始值
 SELECT setval('example_id_seq', 15, true);
 -- 表 sys_affix 的列 id 没有数据，序列 sys_affix_id_seq 将保持默认起始值
-SELECT setval('sys_api_id_seq', 216, true);
-SELECT setval('sys_casbin_rule_id_seq', 7560, true);
+SELECT setval('sys_api_id_seq', 261, true);
+SELECT setval('sys_casbin_rule_id_seq', 7650, true);
 
 
 SET session_replication_role = DEFAULT;

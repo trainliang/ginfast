@@ -55,3 +55,39 @@ func TestPostgreSQLConvertedTinyintColumnsUseNumericTypes(t *testing.T) {
 		}
 	}
 }
+
+func TestPostgreSQLConvertedIncludesEducationFoundationSeed(t *testing.T) {
+	sqlBytes, err := os.ReadFile("postgresql_converted.sql")
+	if err != nil {
+		t.Fatalf("read postgresql schema: %v", err)
+	}
+	sqlText := string(sqlBytes)
+
+	requiredSnippets := []string{
+		"CREATE TABLE edu_course",
+		"CREATE TABLE edu_student",
+		"CREATE TABLE edu_student_contact",
+		"CREATE TABLE edu_class",
+		"CREATE TABLE edu_class_member",
+		"CREATE TABLE edu_room",
+		"CREATE TABLE edu_room_weekly_rule",
+		"CREATE TABLE edu_room_exception",
+		"INSERT INTO sys_api VALUES (217, '学生列表', '/api/edu/students/list'",
+		"INSERT INTO sys_dict VALUES (101, '学生状态', 'edu_student_status'",
+		"INSERT INTO sys_dict_item VALUES (10101, '在读', '1'",
+		"INSERT INTO sys_menu VALUES (140350, 0, '/edu', 'Edu'",
+		"INSERT INTO sys_role_menu VALUES (1, 140351)",
+		"INSERT INTO sys_role_menu VALUES (2, 140351)",
+		"INSERT INTO sys_menu_api VALUES (140351, 217)",
+		"140350,140351,140352,140353,140354",
+		"SELECT setval('sys_api_id_seq', 261, true)",
+		"SELECT setval('sys_casbin_rule_id_seq', 7650, true)",
+		"SELECT setval('sys_menu_id_seq', 140385, true)",
+	}
+
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(sqlText, snippet) {
+			t.Fatalf("postgresql_converted.sql missing required education seed snippet: %s", snippet)
+		}
+	}
+}
