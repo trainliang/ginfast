@@ -755,7 +755,7 @@ INSERT INTO `sys_gen_field` VALUES ('213', '24', 'created_by', 'int', '创建人
 DROP TABLE IF EXISTS `sys_jobs`;
 CREATE TABLE `sys_jobs` (
   `id` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '任务ID',
-  `group` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '任务分组名称',
+  `group_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '任务分组名称',
   `name` varchar(200) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '任务名称',
   `description` text COLLATE utf8mb4_unicode_ci COMMENT '任务描述',
   `executor_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '执行器名称',
@@ -774,7 +774,7 @@ CREATE TABLE `sys_jobs` (
   `deleted_at` datetime DEFAULT NULL,
   `created_by` int(11) unsigned DEFAULT NULL,
   PRIMARY KEY (`id`),
-  KEY `idx_group` (`group`),
+  KEY `idx_group_name` (`group_name`),
   KEY `idx_status` (`status`),
   KEY `idx_executor_name` (`executor_name`),
   KEY `idx_created_at` (`created_at`)

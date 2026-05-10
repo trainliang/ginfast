@@ -31,7 +31,7 @@ func (r *SysJobsListRequest) Handle() func(db *gorm.DB) *gorm.DB {
 		}
 		if r.Group != nil {
 			// 默认等于查询
-			db = db.Where("group = ?", *r.Group)
+			db = db.Where("group_name = ?", *r.Group)
 		}
 		if r.Name != nil {
 			db = db.Where("name LIKE ?", "%"+*r.Name+"%")

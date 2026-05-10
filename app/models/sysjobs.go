@@ -13,7 +13,7 @@ import (
 // SysJobs sys_jobs 模型结构体
 type SysJobs struct {
 	Id              string         `gorm:"column:id;primaryKey;not null" json:"id"`                           // 任务ID
-	Group           string         `gorm:"column:group;not null;index" json:"group"`                          // 任务分组名称
+	Group           string         `gorm:"column:group_name;not null;index" json:"group"`                     // 任务分组名称
 	Name            string         `gorm:"column:name;not null" json:"name"`                                  // 任务名称
 	Description     string         `gorm:"column:description" json:"description"`                             // 任务描述
 	ExecutorName    string         `gorm:"column:executor_name;not null;index" json:"executorName"`           // 执行器名称

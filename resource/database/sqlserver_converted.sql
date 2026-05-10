@@ -704,7 +704,7 @@ SET IDENTITY_INSERT [sys_gen_field] OFF;
 IF OBJECT_ID('sys_jobs', 'U') IS NOT NULL DROP TABLE [sys_jobs];
 CREATE TABLE [sys_jobs] (
     [id] NVARCHAR(255) NOT NULL,
-    [group] NVARCHAR(100) NOT NULL,
+    [group_name] NVARCHAR(100) NOT NULL,
     [name] NVARCHAR(200) NOT NULL,
     [description] NVARCHAR(MAX),
     [executor_name] NVARCHAR(100) NOT NULL,
@@ -740,7 +740,7 @@ CREATE TABLE [sys_job_results] (
     [retry_count] INT NOT NULL DEFAULT 0,
     [created_at] DATETIME NOT NULL DEFAULT GETDATE(),
     PRIMARY KEY ([id]),
-    [CONSTRAINT] NVARCHAR(MAX)
+    CONSTRAINT [sys_job_results_ibfk_1] FOREIGN KEY ([job_id]) REFERENCES [sys_jobs] ([id]) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 
@@ -1260,7 +1260,7 @@ CREATE TABLE [sys_user_tenant] (
 
 
 -- Records of sys_user_tenant
-CREATE INDEX [sys_jobs_idx_group] ON [sys_jobs] ([group]);
+CREATE INDEX [sys_jobs_idx_group_name] ON [sys_jobs] ([group_name]);
 CREATE INDEX [sys_jobs_idx_status] ON [sys_jobs] ([status]);
 CREATE INDEX [sys_jobs_idx_executor_name] ON [sys_jobs] ([executor_name]);
 CREATE INDEX [sys_jobs_idx_created_at] ON [sys_jobs] ([created_at]);

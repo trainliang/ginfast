@@ -796,7 +796,7 @@ INSERT INTO sys_gen_field VALUES (213, 24, 'created_by', 'int', '创建人', '',
 DROP TABLE IF EXISTS sys_jobs;
 CREATE TABLE sys_jobs (
     id VARCHAR(255) NOT NULL,
-    group VARCHAR(100) NOT NULL,
+    group_name VARCHAR(100) NOT NULL,
     name VARCHAR(200) NOT NULL,
     description TEXT,
     executor_name VARCHAR(100) NOT NULL,
@@ -828,7 +828,7 @@ COMMENT ON COLUMN sys_jobs.executor_name IS '执行器名称';
 COMMENT ON COLUMN sys_jobs.parameters IS '任务参数(JSON格式)';
 COMMENT ON COLUMN sys_jobs.timeout IS '超时时间(纳秒)';
 COMMENT ON COLUMN sys_jobs.running_count IS '当前运行中的任务数';
-COMMENT ON COLUMN sys_jobs.group IS '任务分组名称';
+COMMENT ON COLUMN sys_jobs.group_name IS '任务分组名称';
 COMMENT ON COLUMN sys_jobs.execution_policy IS '执行策略: 0=单次执行, 1=重复执行';
 COMMENT ON COLUMN sys_jobs.status IS '任务状态: 0=禁用, 1=启用';
 COMMENT ON COLUMN sys_jobs.cron_expression IS 'Cron表达式';
@@ -849,7 +849,7 @@ CREATE TABLE sys_job_results (
     retry_count INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
-    CONSTRAINT TEXT
+    CONSTRAINT sys_job_results_ibfk_1 FOREIGN KEY (job_id) REFERENCES sys_jobs (id) ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 COMMENT ON COLUMN sys_job_results.id IS '自增主键';
@@ -873,18 +873,18 @@ CREATE TABLE sys_menu (
     redirect VARCHAR(255),
     component VARCHAR(255),
     title VARCHAR(100),
-    is_full BOOLEAN DEFAULT false,
-    hide BOOLEAN DEFAULT false,
-    disable BOOLEAN DEFAULT false,
-    keep_alive BOOLEAN DEFAULT false,
-    affix BOOLEAN DEFAULT false,
+    is_full SMALLINT DEFAULT 0,
+    hide SMALLINT DEFAULT 0,
+    disable SMALLINT DEFAULT 0,
+    keep_alive SMALLINT DEFAULT 0,
+    affix SMALLINT DEFAULT 0,
     link VARCHAR(500) DEFAULT '',
-    iframe BOOLEAN DEFAULT false,
+    iframe SMALLINT DEFAULT 0,
     svg_icon VARCHAR(100) DEFAULT '',
     icon VARCHAR(100) DEFAULT '',
     sort INTEGER DEFAULT 0,
-    type BOOLEAN DEFAULT 2,
-    is_link BOOLEAN DEFAULT false,
+    type SMALLINT DEFAULT 2,
+    is_link SMALLINT DEFAULT 0,
     permission VARCHAR(255) DEFAULT '',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -1441,7 +1441,7 @@ COMMENT ON COLUMN sys_user_tenant.user_id IS '用户ID';
 -- Records of sys_user_tenant
 
 -- 创建索引
-CREATE INDEX sys_jobs_idx_group ON sys_jobs ("group");
+CREATE INDEX sys_jobs_idx_group_name ON sys_jobs (group_name);
 CREATE INDEX sys_jobs_idx_status ON sys_jobs (status);
 CREATE INDEX sys_jobs_idx_executor_name ON sys_jobs (executor_name);
 CREATE INDEX sys_jobs_idx_created_at ON sys_jobs (created_at);
