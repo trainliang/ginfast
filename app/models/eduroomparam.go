@@ -189,6 +189,34 @@ type EduRoomExceptionRequest struct {
 	Reason        string    `json:"reason" form:"reason"`
 }
 
+// EduRoomExceptionListRequest 场地例外列表请求
+type EduRoomExceptionListRequest struct {
+	BasePaging
+	Validator
+	ID     *uint  `form:"id" json:"id"`
+	RoomID *uint  `form:"roomId" json:"roomId"`
+	Type   string `form:"type" json:"type"`
+}
+
+func (r *EduRoomExceptionListRequest) Validate(c *gin.Context) error {
+	return r.Validator.Check(c, r)
+}
+
+func (r *EduRoomExceptionListRequest) Handler() func(db *gorm.DB) *gorm.DB {
+	return func(db *gorm.DB) *gorm.DB {
+		if r.ID != nil {
+			db = db.Where("id = ?", *r.ID)
+		}
+		if r.RoomID != nil {
+			db = db.Where("room_id = ?", *r.RoomID)
+		}
+		if r.Type != "" {
+			db = db.Where("type = ?", r.Type)
+		}
+		return db
+	}
+}
+
 // EduRoomExceptionAddRequest 新增场地例外请求
 type EduRoomExceptionAddRequest struct {
 	Validator

@@ -31,6 +31,10 @@ var sysGenControllers = controllers.NewSysGenController()                   // �
 var pluginsManagerControllers = controllers.NewPluginsManagerController()   // 插件管理控制器
 var sysJobsControllers = controllers.NewSysJobsController()                 // 定时任务控制器
 var sysJobResultsControllers = controllers.NewSysJobResultsController()     // 定时任务执行结果控制器
+var eduStudentControllers = controllers.NewEduStudentController()           // 教培学生控制器
+var eduCourseControllers = controllers.NewEduCourseController()             // 教培课程/项目控制器
+var eduClassControllers = controllers.NewEduClassController()               // 教培班级控制器
+var eduRoomControllers = controllers.NewEduRoomController()                 // 教培教室/场地控制器
 
 // InitRoutes 初始化路由
 func InitRoutes(engine *gin.Engine) {
@@ -214,6 +218,71 @@ func InitRoutes(engine *gin.Engine) {
 				sysDictItem.PUT("/edit", sysDictItemControllers.Update)
 				// 删除字典项
 				sysDictItem.DELETE("/delete", sysDictItemControllers.Delete)
+			}
+
+			// 教培管理路由组
+			edu := protected.Group("/edu")
+			{
+				students := edu.Group("/students")
+				{
+					students.GET("/list", eduStudentControllers.List)
+					students.GET("/export", eduStudentControllers.Export)
+					students.GET("/:id", eduStudentControllers.GetByID)
+					students.POST("/add", eduStudentControllers.Add)
+					students.PUT("/edit", eduStudentControllers.Update)
+					students.DELETE("/delete", eduStudentControllers.Delete)
+					students.POST("/import", eduStudentControllers.Import)
+				}
+
+				courses := edu.Group("/courses")
+				{
+					courses.GET("/list", eduCourseControllers.List)
+					courses.GET("/options", eduCourseControllers.Options)
+					courses.GET("/export", eduCourseControllers.Export)
+					courses.GET("/:id", eduCourseControllers.GetByID)
+					courses.POST("/add", eduCourseControllers.Add)
+					courses.PUT("/edit", eduCourseControllers.Update)
+					courses.DELETE("/delete", eduCourseControllers.Delete)
+					courses.POST("/import", eduCourseControllers.Import)
+				}
+
+				classes := edu.Group("/classes")
+				{
+					classes.GET("/list", eduClassControllers.List)
+					classes.GET("/teacher-options", eduClassControllers.TeacherOptions)
+					classes.GET("/export", eduClassControllers.Export)
+					classes.GET("/:id", eduClassControllers.GetByID)
+					classes.POST("/add", eduClassControllers.Add)
+					classes.PUT("/edit", eduClassControllers.Update)
+					classes.DELETE("/delete", eduClassControllers.Delete)
+					classes.GET("/:id/members", eduClassControllers.Members)
+					classes.POST("/:id/members/add", eduClassControllers.AddMember)
+					classes.PUT("/:id/members/edit", eduClassControllers.UpdateMember)
+					classes.DELETE("/:id/members/delete", eduClassControllers.DeleteMember)
+					classes.POST("/import", eduClassControllers.Import)
+					classes.POST("/members/import", eduClassControllers.ImportMembers)
+					classes.GET("/members/export", eduClassControllers.ExportMembers)
+				}
+
+				rooms := edu.Group("/rooms")
+				{
+					rooms.GET("/list", eduRoomControllers.List)
+					rooms.GET("/options", eduRoomControllers.Options)
+					rooms.GET("/export", eduRoomControllers.Export)
+					rooms.GET("/:id", eduRoomControllers.GetByID)
+					rooms.POST("/add", eduRoomControllers.Add)
+					rooms.PUT("/edit", eduRoomControllers.Update)
+					rooms.DELETE("/delete", eduRoomControllers.Delete)
+					rooms.GET("/:id/weekly-rules", eduRoomControllers.WeeklyRules)
+					rooms.POST("/:id/weekly-rules/save", eduRoomControllers.SaveWeeklyRules)
+					rooms.GET("/:id/exceptions", eduRoomControllers.Exceptions)
+					rooms.POST("/:id/exceptions/add", eduRoomControllers.AddException)
+					rooms.PUT("/:id/exceptions/edit", eduRoomControllers.UpdateException)
+					rooms.DELETE("/:id/exceptions/delete", eduRoomControllers.DeleteException)
+					rooms.POST("/import", eduRoomControllers.Import)
+					rooms.POST("/weekly-rules/import", eduRoomControllers.ImportWeeklyRules)
+					rooms.POST("/exceptions/import", eduRoomControllers.ImportExceptions)
+				}
 			}
 
 			// 系统API路由组
