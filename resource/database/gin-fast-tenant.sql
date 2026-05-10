@@ -104,6 +104,206 @@ INSERT INTO `example` VALUES ('14', '企业门户网站', '企业信息发布和
 INSERT INTO `example` VALUES ('15', '数据分析平台', '大数据处理和分析工具集', '2024-01-29 09:35:00', '2024-02-06 11:30:00', null, '1', '1');
 
 -- ----------------------------
+-- Table structure for edu_course
+-- ----------------------------
+DROP TABLE IF EXISTS `edu_course`;
+CREATE TABLE `edu_course` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT 'ID',
+  `name` varchar(100) NOT NULL COMMENT '课程/项目名称',
+  `code` varchar(64) NOT NULL COMMENT '课程/项目编码',
+  `type` varchar(64) DEFAULT '' COMMENT '课程/项目类型',
+  `grade_range` varchar(128) DEFAULT '' COMMENT '适用年龄/年级',
+  `status` tinyint(1) DEFAULT '1' COMMENT '状态 0停用 1启用',
+  `sort` int(11) DEFAULT '0' COMMENT '排序',
+  `description` varchar(500) DEFAULT '' COMMENT '描述',
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  `deleted_at` datetime DEFAULT NULL,
+  `created_by` int(11) unsigned DEFAULT '0' COMMENT '创建人',
+  `tenant_id` int(11) unsigned DEFAULT '0' COMMENT '租户ID',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_edu_course_tenant_code` (`tenant_id`,`code`),
+  KEY `idx_edu_course_deleted_at` (`deleted_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='教培课程/项目';
+
+-- ----------------------------
+-- Table structure for edu_student
+-- ----------------------------
+DROP TABLE IF EXISTS `edu_student`;
+CREATE TABLE `edu_student` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT 'ID',
+  `name` varchar(100) NOT NULL COMMENT '学生姓名',
+  `gender` varchar(32) DEFAULT '' COMMENT '性别',
+  `birthday` datetime DEFAULT NULL COMMENT '生日',
+  `phone` varchar(64) DEFAULT '' COMMENT '联系电话',
+  `status` tinyint(1) DEFAULT '1' COMMENT '状态',
+  `avatar` varchar(255) DEFAULT '' COMMENT '头像/照片',
+  `school` varchar(128) DEFAULT '' COMMENT '就读学校',
+  `grade` varchar(64) DEFAULT '' COMMENT '年级',
+  `school_class` varchar(64) DEFAULT '' COMMENT '原班级',
+  `source_channel` varchar(64) DEFAULT '' COMMENT '来源渠道',
+  `enroll_date` datetime DEFAULT NULL COMMENT '报名日期',
+  `health_note` varchar(500) DEFAULT '' COMMENT '健康说明',
+  `allergy_note` varchar(500) DEFAULT '' COMMENT '过敏史',
+  `emergency_contact` varchar(128) DEFAULT '' COMMENT '紧急联系人',
+  `pickup_note` varchar(500) DEFAULT '' COMMENT '接送备注',
+  `remark` varchar(500) DEFAULT '' COMMENT '备注',
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  `deleted_at` datetime DEFAULT NULL,
+  `created_by` int(11) unsigned DEFAULT '0' COMMENT '创建人',
+  `tenant_id` int(11) unsigned DEFAULT '0' COMMENT '租户ID',
+  PRIMARY KEY (`id`),
+  KEY `idx_edu_student_deleted_at` (`deleted_at`),
+  KEY `idx_edu_student_tenant_name` (`tenant_id`,`name`),
+  KEY `idx_edu_student_tenant_phone` (`tenant_id`,`phone`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='教培学生';
+
+-- ----------------------------
+-- Table structure for edu_student_contact
+-- ----------------------------
+DROP TABLE IF EXISTS `edu_student_contact`;
+CREATE TABLE `edu_student_contact` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT 'ID',
+  `student_id` int(11) unsigned NOT NULL COMMENT '学生ID',
+  `relation` varchar(64) DEFAULT '' COMMENT '关系',
+  `name` varchar(100) NOT NULL COMMENT '联系人姓名',
+  `phone` varchar(64) NOT NULL COMMENT '联系人电话',
+  `is_primary` tinyint(1) DEFAULT '0' COMMENT '是否主联系人',
+  `can_pickup` tinyint(1) DEFAULT '0' COMMENT '是否允许接送',
+  `remark` varchar(255) DEFAULT '' COMMENT '备注',
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  `deleted_at` datetime DEFAULT NULL,
+  `created_by` int(11) unsigned DEFAULT '0' COMMENT '创建人',
+  `tenant_id` int(11) unsigned DEFAULT '0' COMMENT '租户ID',
+  PRIMARY KEY (`id`),
+  KEY `idx_edu_student_contact_deleted_at` (`deleted_at`),
+  KEY `idx_edu_student_contact_student` (`tenant_id`,`student_id`),
+  KEY `idx_edu_student_contact_phone` (`tenant_id`,`phone`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='教培学生联系人';
+
+-- ----------------------------
+-- Table structure for edu_class
+-- ----------------------------
+DROP TABLE IF EXISTS `edu_class`;
+CREATE TABLE `edu_class` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT 'ID',
+  `name` varchar(100) NOT NULL COMMENT '班级名称',
+  `code` varchar(64) NOT NULL COMMENT '班级编码',
+  `class_type` varchar(32) NOT NULL COMMENT '班级类型 daycare/group',
+  `course_id` int(11) unsigned NOT NULL COMMENT '课程/项目ID',
+  `teacher_id` int(11) unsigned NOT NULL COMMENT '负责教师用户ID',
+  `room_id` int(11) unsigned DEFAULT '0' COMMENT '默认场地ID',
+  `capacity` int(11) NOT NULL COMMENT '容量',
+  `status` tinyint(1) DEFAULT '1' COMMENT '状态',
+  `start_date` datetime DEFAULT NULL COMMENT '开班日期',
+  `end_date` datetime DEFAULT NULL COMMENT '结班日期',
+  `remark` varchar(500) DEFAULT '' COMMENT '备注',
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  `deleted_at` datetime DEFAULT NULL,
+  `created_by` int(11) unsigned DEFAULT '0' COMMENT '创建人',
+  `tenant_id` int(11) unsigned DEFAULT '0' COMMENT '租户ID',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_edu_class_tenant_code` (`tenant_id`,`code`),
+  KEY `idx_edu_class_deleted_at` (`deleted_at`),
+  KEY `idx_edu_class_tenant_course` (`tenant_id`,`course_id`),
+  KEY `idx_edu_class_tenant_teacher` (`tenant_id`,`teacher_id`),
+  KEY `idx_edu_class_tenant_room` (`tenant_id`,`room_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='教培班级';
+
+-- ----------------------------
+-- Table structure for edu_class_member
+-- ----------------------------
+DROP TABLE IF EXISTS `edu_class_member`;
+CREATE TABLE `edu_class_member` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT 'ID',
+  `class_id` int(11) unsigned NOT NULL COMMENT '班级ID',
+  `student_id` int(11) unsigned NOT NULL COMMENT '学生ID',
+  `join_date` datetime DEFAULT NULL COMMENT '入班日期',
+  `leave_date` datetime DEFAULT NULL COMMENT '退班日期',
+  `status` varchar(32) NOT NULL COMMENT '状态 studying/paused/left',
+  `remark` varchar(500) DEFAULT '' COMMENT '备注',
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  `deleted_at` datetime DEFAULT NULL,
+  `created_by` int(11) unsigned DEFAULT '0' COMMENT '创建人',
+  `tenant_id` int(11) unsigned DEFAULT '0' COMMENT '租户ID',
+  PRIMARY KEY (`id`),
+  KEY `idx_edu_class_member_deleted_at` (`deleted_at`),
+  KEY `idx_edu_class_member_class` (`tenant_id`,`class_id`),
+  KEY `idx_edu_class_member_student` (`tenant_id`,`student_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='教培班级成员';
+
+-- ----------------------------
+-- Table structure for edu_room
+-- ----------------------------
+DROP TABLE IF EXISTS `edu_room`;
+CREATE TABLE `edu_room` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT 'ID',
+  `name` varchar(100) NOT NULL COMMENT '场地名称',
+  `code` varchar(64) NOT NULL COMMENT '场地编码',
+  `type` varchar(64) DEFAULT '' COMMENT '场地类型',
+  `capacity` int(11) NOT NULL COMMENT '容量',
+  `location` varchar(255) DEFAULT '' COMMENT '位置说明',
+  `status` tinyint(1) DEFAULT '1' COMMENT '状态',
+  `remark` varchar(500) DEFAULT '' COMMENT '备注',
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  `deleted_at` datetime DEFAULT NULL,
+  `created_by` int(11) unsigned DEFAULT '0' COMMENT '创建人',
+  `tenant_id` int(11) unsigned DEFAULT '0' COMMENT '租户ID',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_edu_room_tenant_code` (`tenant_id`,`code`),
+  KEY `idx_edu_room_deleted_at` (`deleted_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='教培场地';
+
+-- ----------------------------
+-- Table structure for edu_room_weekly_rule
+-- ----------------------------
+DROP TABLE IF EXISTS `edu_room_weekly_rule`;
+CREATE TABLE `edu_room_weekly_rule` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT 'ID',
+  `room_id` int(11) unsigned NOT NULL COMMENT '场地ID',
+  `weekday` tinyint(1) NOT NULL COMMENT '星期 1-7',
+  `start_time` varchar(5) NOT NULL COMMENT '开始时间 HH:mm',
+  `end_time` varchar(5) NOT NULL COMMENT '结束时间 HH:mm',
+  `available` tinyint(1) DEFAULT '1' COMMENT '是否可用',
+  `remark` varchar(255) DEFAULT '' COMMENT '备注',
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  `deleted_at` datetime DEFAULT NULL,
+  `created_by` int(11) unsigned DEFAULT '0' COMMENT '创建人',
+  `tenant_id` int(11) unsigned DEFAULT '0' COMMENT '租户ID',
+  PRIMARY KEY (`id`),
+  KEY `idx_edu_room_weekly_rule_deleted_at` (`deleted_at`),
+  KEY `idx_edu_room_weekly_room` (`tenant_id`,`room_id`,`weekday`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='教培场地周规则';
+
+-- ----------------------------
+-- Table structure for edu_room_exception
+-- ----------------------------
+DROP TABLE IF EXISTS `edu_room_exception`;
+CREATE TABLE `edu_room_exception` (
+  `id` int(11) unsigned NOT NULL AUTO_INCREMENT COMMENT 'ID',
+  `room_id` int(11) unsigned NOT NULL COMMENT '场地ID',
+  `exception_date` datetime NOT NULL COMMENT '例外日期',
+  `type` varchar(32) NOT NULL COMMENT '例外类型 open/closed',
+  `start_time` varchar(5) DEFAULT '' COMMENT '开始时间 HH:mm',
+  `end_time` varchar(5) DEFAULT '' COMMENT '结束时间 HH:mm',
+  `reason` varchar(255) DEFAULT '' COMMENT '原因',
+  `created_at` datetime DEFAULT NULL,
+  `updated_at` datetime DEFAULT NULL,
+  `deleted_at` datetime DEFAULT NULL,
+  `created_by` int(11) unsigned DEFAULT '0' COMMENT '创建人',
+  `tenant_id` int(11) unsigned DEFAULT '0' COMMENT '租户ID',
+  PRIMARY KEY (`id`),
+  KEY `idx_edu_room_exception_deleted_at` (`deleted_at`),
+  KEY `idx_edu_room_exception_room_date` (`tenant_id`,`room_id`,`exception_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='教培场地例外';
+
+-- ----------------------------
 -- Table structure for sys_affix
 -- ----------------------------
 DROP TABLE IF EXISTS `sys_affix`;
@@ -285,7 +485,7 @@ INSERT INTO `sys_api` VALUES ('198', '获取插件列表', '/api/pluginsmanager/
 INSERT INTO `sys_api` VALUES ('199', '导出插件', '/api/pluginsmanager/export', 'POST', '插件管理', '2025-12-08 16:39:19', '2025-12-08 16:44:36', null, '1');
 INSERT INTO `sys_api` VALUES ('200', '导入插件', '/api/pluginsmanager/import', 'POST', '插件管理', '2025-12-08 16:47:11', '2025-12-08 16:47:11', null, '1');
 INSERT INTO `sys_api` VALUES ('201', '卸载插件', '/api/pluginsmanager/uninstall', 'DELETE', '插件管理', '2025-12-08 16:48:07', '2025-12-08 16:48:07', null, '1');
-INSERT INTO `sys_api` VALUES ('202', '切换租户', '/api/users/switchTenant/:tenantld', 'GET', '用户管理', '2026-01-09 16:29:37', '2026-01-09 16:29:37', null, '1');
+INSERT INTO `sys_api` VALUES ('202', '切换租户', '/api/users/switchTenant/:tenantId', 'GET', '用户管理', '2026-01-09 16:29:37', '2026-01-09 16:29:37', null, '1');
 INSERT INTO `sys_api` VALUES ('203', '定时任务列表', '/api/sysjobs/list', 'GET', '任务调度', '2026-02-11 11:56:54', '2026-02-11 11:56:54', null, '1');
 INSERT INTO `sys_api` VALUES ('204', '定时任务获取所有执行器列表', '/api/sysjobs/executors', 'GET', '任务调度', '2026-02-12 17:57:47', '2026-02-12 17:57:47', null, '1');
 INSERT INTO `sys_api` VALUES ('205', '定时任务新增', '/api/sysjobs/add', 'POST', '任务调度', '2026-02-11 11:57:33', '2026-02-11 11:57:33', null, '1');
@@ -410,7 +610,7 @@ INSERT INTO `sys_casbin_rule` VALUES ('7460', 'p', 'role_1', '/api/users/edit', 
 INSERT INTO `sys_casbin_rule` VALUES ('7466', 'p', 'role_1', '/api/users/list', 'GET', '*', '', '');
 INSERT INTO `sys_casbin_rule` VALUES ('7440', 'p', 'role_1', '/api/users/logout', 'POST', '*', '', '');
 INSERT INTO `sys_casbin_rule` VALUES ('7427', 'p', 'role_1', '/api/users/profile', 'GET', '*', '', '');
-INSERT INTO `sys_casbin_rule` VALUES ('7407', 'p', 'role_1', '/api/users/switchTenant/:tenantld', 'GET', '*', '', '');
+INSERT INTO `sys_casbin_rule` VALUES ('7407', 'p', 'role_1', '/api/users/switchTenant/:tenantId', 'GET', '*', '', '');
 INSERT INTO `sys_casbin_rule` VALUES ('7394', 'p', 'role_1', '/api/users/updateAccount', 'PUT', '*', '', '');
 INSERT INTO `sys_casbin_rule` VALUES ('7465', 'p', 'role_1', '/api/users/updateBasicInfo', 'PUT', '*', '', '');
 INSERT INTO `sys_casbin_rule` VALUES ('7448', 'p', 'role_1', '/api/users/uploadAvatar', 'POST', '*', '', '');
@@ -563,7 +763,7 @@ INSERT INTO `sys_casbin_rule` VALUES ('7545', 'p', 'role_2', '/api/users/edit', 
 INSERT INTO `sys_casbin_rule` VALUES ('7543', 'p', 'role_2', '/api/users/list', 'GET', '*', '', '');
 INSERT INTO `sys_casbin_rule` VALUES ('7526', 'p', 'role_2', '/api/users/logout', 'POST', '*', '', '');
 INSERT INTO `sys_casbin_rule` VALUES ('7499', 'p', 'role_2', '/api/users/profile', 'GET', '*', '', '');
-INSERT INTO `sys_casbin_rule` VALUES ('7492', 'p', 'role_2', '/api/users/switchTenant/:tenantld', 'GET', '*', '', '');
+INSERT INTO `sys_casbin_rule` VALUES ('7492', 'p', 'role_2', '/api/users/switchTenant/:tenantId', 'GET', '*', '', '');
 INSERT INTO `sys_casbin_rule` VALUES ('7489', 'p', 'role_2', '/api/users/updateAccount', 'PUT', '*', '', '');
 INSERT INTO `sys_casbin_rule` VALUES ('7509', 'p', 'role_2', '/api/users/updateBasicInfo', 'PUT', '*', '', '');
 INSERT INTO `sys_casbin_rule` VALUES ('7542', 'p', 'role_2', '/api/users/uploadAvatar', 'POST', '*', '', '');
