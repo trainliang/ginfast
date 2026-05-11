@@ -56,6 +56,53 @@ func TestPostgreSQLConvertedTinyintColumnsUseNumericTypes(t *testing.T) {
 	}
 }
 
+func TestPostgreSQLSchemaIncludesEduBenefitFoundationPatch(t *testing.T) {
+	sqlBytes, err := os.ReadFile("patches/2026-05-11-edu-benefit-foundation-postgresql.sql")
+	if err != nil {
+		t.Fatalf("read edu benefit foundation patch: %v", err)
+	}
+	sqlText := string(sqlBytes)
+
+	requiredSnippets := []string{
+		"ALTER TABLE edu_course ADD COLUMN IF NOT EXISTS default_teaching_mode VARCHAR(32) DEFAULT 'offline'",
+		"ALTER TABLE edu_course ADD COLUMN IF NOT EXISTS requires_room SMALLINT DEFAULT 1",
+		"ALTER TABLE edu_class ADD COLUMN IF NOT EXISTS benefit_check_policy VARCHAR(32) DEFAULT 'required'",
+		"CREATE TABLE IF NOT EXISTS edu_term",
+		"CREATE TABLE IF NOT EXISTS edu_term_closed_day",
+		"CREATE TABLE IF NOT EXISTS edu_benefit_product",
+		"CREATE TABLE IF NOT EXISTS edu_benefit_product_course",
+		"CREATE TABLE IF NOT EXISTS edu_student_benefit",
+		"CREATE TABLE IF NOT EXISTS edu_benefit_ledger",
+		"CREATE TABLE IF NOT EXISTS edu_benefit_event",
+		"CREATE TABLE IF NOT EXISTS edu_benefit_external_sync",
+		"CREATE TABLE IF NOT EXISTS edu_lesson_student_eligibility",
+		"CONSTRAINT uk_edu_term_tenant_name UNIQUE (tenant_id, name)",
+		"CONSTRAINT uk_edu_benefit_product_tenant_code UNIQUE (tenant_id, code)",
+		"CREATE INDEX IF NOT EXISTS idx_edu_student_benefit_student_course ON edu_student_benefit (tenant_id, student_id, course_id)",
+		"CREATE INDEX IF NOT EXISTS idx_edu_benefit_external_sync_provider_key ON edu_benefit_external_sync (tenant_id, provider_code, idempotency_key)",
+		"INSERT INTO sys_api (id, title, path, method, api_group, created_at, updated_at, deleted_at, created_by) VALUES",
+		"'/api/edu/terms/list', 'GET'",
+		"'/api/edu/benefit-products/list', 'GET'",
+		"'/api/edu/student-benefits/repair-schedule', 'POST'",
+		"'/api/edu/benefit-external-sync/retry', 'POST'",
+		"INSERT INTO sys_menu (id, parent_id, path, name, redirect, component, title, is_full, hide, disable, keep_alive, affix, link, iframe, svg_icon, icon, sort, type, is_link, permission, created_at, updated_at, deleted_at, created_by) VALUES",
+		"'edu/term/term', '学期管理'",
+		"'edu/benefit/product', '权益产品'",
+		"'edu/benefit/student-benefit', '学生权益'",
+		"INSERT INTO sys_menu_api (menu_id, api_id) VALUES",
+		"INSERT INTO sys_casbin_rule (ptype, v0, v1, v2, v3, v4, v5)",
+		"UPDATE sys_tenants",
+		"SELECT setval('sys_api_id_seq', GREATEST((SELECT last_value FROM sys_api_id_seq), 281), true)",
+		"SELECT setval('sys_menu_id_seq', GREATEST((SELECT last_value FROM sys_menu_id_seq), 140404), true)",
+	}
+
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(sqlText, snippet) {
+			t.Fatalf("edu benefit foundation patch missing required snippet: %s", snippet)
+		}
+	}
+}
+
 func TestPostgreSQLConvertedIncludesEducationFoundationSeed(t *testing.T) {
 	sqlBytes, err := os.ReadFile("postgresql_converted.sql")
 	if err != nil {
