@@ -805,6 +805,187 @@ func TestEduScheduleServiceRescheduleLesson(t *testing.T) {
 	})
 }
 
+func TestEduScheduleServiceMakeupLesson(t *testing.T) {
+	t.Run("creates makeup lesson from source lesson and writes traceable change log", func(t *testing.T) {
+		db := setupEduTestDB(t)
+		svc := NewEduScheduleService()
+		ctx := contextWithTenant(1)
+		seedEduTenantData(t, 1)
+		seedStudent(t, db, 1, 1)
+		seedBenefitProductAndStudentBenefitForSchedule(t, db, 1, 1, 1, 1, time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 6, 30, 0, 0, 0, 0, time.UTC))
+
+		sourceLesson := &models.EduLesson{
+			LessonType:   "one_to_one",
+			LessonDate:   datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
+			StartTime:    "09:00",
+			EndTime:      "10:00",
+			StudentID:    1,
+			CourseID:     1,
+			TeacherID:    7,
+			TeachingMode: "offline",
+			RequiresRoom: 1,
+			RoomID:       3,
+			Status:       "scheduled",
+			TenantID:     1,
+		}
+		seedExistingLesson(t, db, 1, sourceLesson)
+
+		roomID := uint(5)
+		lesson, err := svc.MakeupLesson(ctx, 1, &models.EduLessonMakeupRequest{
+			LessonID:     sourceLesson.ID,
+			LessonDate:   datePtr(time.Date(2026, 5, 12, 0, 0, 0, 0, time.UTC)),
+			StartTime:    "10:00",
+			EndTime:      "11:00",
+			TeacherID:    8,
+			TeachingMode: "offline",
+			RoomID:       &roomID,
+			Reason:       "原课次请假补课",
+		})
+		if err != nil {
+			t.Fatalf("makeup lesson: %v", err)
+		}
+		if lesson.LessonType != "makeup" {
+			t.Fatalf("expected makeup lesson type, got %+v", lesson)
+		}
+		if lesson.SourceLessonID != sourceLesson.ID {
+			t.Fatalf("expected source lesson id %d, got %+v", sourceLesson.ID, lesson)
+		}
+		if lesson.CourseID != sourceLesson.CourseID || lesson.StudentID != sourceLesson.StudentID || lesson.TeachingMode != "offline" {
+			t.Fatalf("expected copied lesson fields, got %+v", lesson)
+		}
+		if lesson.TeacherID != 8 || lesson.RoomID != 5 || lesson.StartTime != "10:00" || lesson.EndTime != "11:00" {
+			t.Fatalf("expected overrides to apply, got %+v", lesson)
+		}
+
+		var logs []models.EduLessonChangeLog
+		if err := db.Order("id asc").Find(&logs).Error; err != nil {
+			t.Fatalf("load change logs: %v", err)
+		}
+		if len(logs) != 1 {
+			t.Fatalf("expected 1 change log, got %d", len(logs))
+		}
+		if logs[0].ActionType != "makeup" || logs[0].LessonID != lesson.ID {
+			t.Fatalf("unexpected change log: %+v", logs[0])
+		}
+		if !strings.Contains(logs[0].BeforeData, fmt.Sprintf("source_lesson_id=%d", sourceLesson.ID)) || !strings.Contains(logs[0].AfterData, fmt.Sprintf("lesson_id=%d", lesson.ID)) {
+			t.Fatalf("expected log to trace source and new lesson, got %+v", logs[0])
+		}
+	})
+
+	t.Run("conflict blocks makeup lesson creation", func(t *testing.T) {
+		db := setupEduTestDB(t)
+		svc := NewEduScheduleService()
+		ctx := contextWithTenant(1)
+		seedEduTenantData(t, 1)
+		seedStudent(t, db, 1, 1)
+		seedBenefitProductAndStudentBenefitForSchedule(t, db, 1, 1, 1, 1, time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 6, 30, 0, 0, 0, 0, time.UTC))
+
+		sourceLesson := &models.EduLesson{
+			LessonType:   "one_to_one",
+			LessonDate:   datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
+			StartTime:    "09:00",
+			EndTime:      "10:00",
+			StudentID:    1,
+			CourseID:     1,
+			TeacherID:    7,
+			TeachingMode: "online",
+			RequiresRoom: 0,
+			Status:       "scheduled",
+			TenantID:     1,
+		}
+		seedExistingLesson(t, db, 1, sourceLesson)
+		seedExistingLesson(t, db, 1, &models.EduLesson{
+			LessonType:   "one_to_one",
+			LessonDate:   datePtr(time.Date(2026, 5, 12, 0, 0, 0, 0, time.UTC)),
+			StartTime:    "10:30",
+			EndTime:      "11:30",
+			StudentID:    2,
+			CourseID:     1,
+			TeacherID:    8,
+			TeachingMode: "online",
+			RequiresRoom: 0,
+			Status:       "scheduled",
+			TenantID:     1,
+		})
+
+		_, err := svc.MakeupLesson(ctx, 1, &models.EduLessonMakeupRequest{
+			LessonID:     sourceLesson.ID,
+			LessonDate:   datePtr(time.Date(2026, 5, 12, 0, 0, 0, 0, time.UTC)),
+			StartTime:    "10:00",
+			EndTime:      "11:00",
+			TeacherID:    8,
+			TeachingMode: "online",
+			Reason:       "原课次补课",
+		})
+		if err == nil {
+			t.Fatalf("expected conflict to be rejected")
+		}
+		var lessonCount int64
+		if err := db.Model(&models.EduLesson{}).Count(&lessonCount).Error; err != nil {
+			t.Fatalf("count lessons: %v", err)
+		}
+		if lessonCount != 2 {
+			t.Fatalf("expected no makeup lesson inserted, got %d lessons", lessonCount)
+		}
+		var logCount int64
+		if err := db.Model(&models.EduLessonChangeLog{}).Count(&logCount).Error; err != nil {
+			t.Fatalf("count logs: %v", err)
+		}
+		if logCount != 0 {
+			t.Fatalf("expected no change logs on conflict, got %d", logCount)
+		}
+	})
+
+	t.Run("makeup lesson writes eligibility rows for source lesson student", func(t *testing.T) {
+		db := setupEduTestDB(t)
+		svc := NewEduScheduleService()
+		ctx := contextWithTenant(1)
+		seedEduTenantData(t, 1)
+		seedStudent(t, db, 1, 1)
+
+		sourceLesson := &models.EduLesson{
+			LessonType:   "one_to_one",
+			LessonDate:   datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
+			StartTime:    "09:00",
+			EndTime:      "10:00",
+			StudentID:    1,
+			CourseID:     1,
+			TeacherID:    7,
+			TeachingMode: "online",
+			RequiresRoom: 0,
+			Status:       "scheduled",
+			TenantID:     1,
+		}
+		seedExistingLesson(t, db, 1, sourceLesson)
+
+		lesson, err := svc.MakeupLesson(ctx, 1, &models.EduLessonMakeupRequest{
+			LessonID:     sourceLesson.ID,
+			LessonDate:   datePtr(time.Date(2026, 5, 12, 0, 0, 0, 0, time.UTC)),
+			StartTime:    "10:00",
+			EndTime:      "11:00",
+			TeacherID:    7,
+			TeachingMode: "online",
+			Reason:       "原课次补课",
+		})
+		if err != nil {
+			t.Fatalf("makeup lesson: %v", err)
+		}
+		var eligibilities []models.EduLessonStudentEligibility
+		if err := db.Order("id asc").Find(&eligibilities).Error; err != nil {
+			t.Fatalf("load eligibilities: %v", err)
+		}
+		if len(eligibilities) != 1 {
+			t.Fatalf("expected 1 eligibility row, got %d", len(eligibilities))
+		}
+		if eligibilities[0].LessonID != lesson.ID || eligibilities[0].StudentID != 1 {
+			t.Fatalf("unexpected eligibility row: %+v", eligibilities[0])
+		}
+		if eligibilities[0].EligibilityStatus == "" {
+			t.Fatalf("expected eligibility status to be recorded: %+v", eligibilities[0])
+		}
+	})
+}
+
 func TestEduScheduleServiceStopCancelRestoreLesson(t *testing.T) {
 	t.Run("stop lesson updates status and writes change log", func(t *testing.T) {
 		db := setupEduTestDB(t)

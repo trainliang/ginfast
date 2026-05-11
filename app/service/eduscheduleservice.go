@@ -399,6 +399,176 @@ func (s *EduScheduleService) RestoreLesson(ctx context.Context, tenantID uint, r
 	return s.changeLessonStatus(ctx, tenantID, req.LessonID, "scheduled", "restore", req.Reason, true)
 }
 
+func (s *EduScheduleService) MakeupLesson(ctx context.Context, tenantID uint, req *models.EduLessonMakeupRequest) (*models.EduLesson, error) {
+	if req == nil {
+		return nil, errors.New("请求不能为空")
+	}
+	if tenantID == 0 {
+		tenantID = tenantIDFromContext(ctx)
+	}
+	if tenantID == 0 {
+		return nil, errors.New("缺少租户信息")
+	}
+	if err := ensureTenantID(tenantID); err != nil {
+		return nil, err
+	}
+	if req.LessonDate == nil || req.LessonDate.Time.IsZero() {
+		return nil, errors.New("新日期不能为空")
+	}
+	if strings.TrimSpace(req.StartTime) == "" {
+		return nil, errors.New("新开始时间不能为空")
+	}
+	if strings.TrimSpace(req.EndTime) == "" {
+		return nil, errors.New("新结束时间不能为空")
+	}
+	if strings.TrimSpace(req.Reason) == "" {
+		return nil, errors.New("补课原因不能为空")
+	}
+	if err := validateLessonRoom(&models.EduScheduleRule{
+		TeachingMode: req.TeachingMode,
+		RequiresRoom: func() int8 {
+			if req.RoomID != nil && *req.RoomID != 0 {
+				return 1
+			}
+			return 0
+		}(),
+		RoomID: func() uint {
+			if req.RoomID != nil {
+				return *req.RoomID
+			}
+			return 0
+		}(),
+	}); err != nil {
+		return nil, err
+	}
+
+	var created *models.EduLesson
+	err := app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var source models.EduLesson
+		if err := requireTenant(tx.Model(&models.EduLesson{}), tenantID).Where("id = ?", req.LessonID).First(&source).Error; err != nil {
+			return err
+		}
+
+		teachingMode := strings.TrimSpace(req.TeachingMode)
+		if teachingMode == "" {
+			teachingMode = strings.TrimSpace(source.TeachingMode)
+		}
+		roomID := source.RoomID
+		requiresRoom := source.RequiresRoom
+		if strings.EqualFold(teachingMode, "offline") {
+			requiresRoom = 1
+			if req.RoomID != nil {
+				roomID = *req.RoomID
+			}
+			if roomID == 0 {
+				return errors.New("线下课需要场地")
+			}
+		} else {
+			requiresRoom = 0
+			roomID = 0
+		}
+
+		teacherID := req.TeacherID
+		if teacherID == 0 {
+			teacherID = source.TeacherID
+		}
+		if teacherID == 0 {
+			return errors.New("教师ID不能为空")
+		}
+		if source.CourseID == 0 {
+			return errors.New("来源课次课程ID不能为空")
+		}
+		if source.StudentID == 0 && source.ClassID == 0 {
+			return errors.New("来源课次缺少学生或班级信息")
+		}
+
+		conflictResult, err := s.checkConflictsWithDB(ctx, tx, &models.EduScheduleConflictCheckRequest{
+			LessonID:     source.ID,
+			RuleID:       source.RuleID,
+			LessonDate:   req.LessonDate,
+			StartTime:    req.StartTime,
+			EndTime:      req.EndTime,
+			ClassID:      source.ClassID,
+			StudentID:    source.StudentID,
+			CourseID:     source.CourseID,
+			TeacherID:    teacherID,
+			TeachingMode: teachingMode,
+			RequiresRoom: requiresRoom,
+			RoomID:       roomID,
+		})
+		if err != nil {
+			return err
+		}
+		if conflictResult != nil && conflictResult.HasConflict {
+			return errors.New("存在排课冲突")
+		}
+
+		lesson := &models.EduLesson{
+			RuleID:         source.RuleID,
+			RuleVersion:    source.RuleVersion,
+			LessonType:     "makeup",
+			LessonDate:     &models.JSONTime{Time: truncateDate(req.LessonDate.Time)},
+			StartTime:      req.StartTime,
+			EndTime:        req.EndTime,
+			ClassID:        source.ClassID,
+			StudentID:      source.StudentID,
+			CourseID:       source.CourseID,
+			TeacherID:      teacherID,
+			TeachingMode:   teachingMode,
+			RequiresRoom:   requiresRoom,
+			RoomID:         roomID,
+			Status:         "scheduled",
+			SourceLessonID: source.ID,
+			CreatedBy:      source.CreatedBy,
+			TenantID:       tenantID,
+		}
+		if err := tx.Create(lesson).Error; err != nil {
+			return err
+		}
+
+		if err := s.writeEligibilityRowsTx(tx, ctx, lesson, &models.EduScheduleRule{
+			RuleType:     func() string {
+				if source.ClassID != 0 {
+					return "class"
+				}
+				return "one_to_one"
+			}(),
+			ClassID:      source.ClassID,
+			StudentID:    source.StudentID,
+			CourseID:     source.CourseID,
+			TeacherID:    teacherID,
+			TeachingMode: teachingMode,
+			RequiresRoom: requiresRoom,
+			RoomID:       roomID,
+			TenantID:     tenantID,
+		}); err != nil {
+			return err
+		}
+
+		beforeData := fmt.Sprintf("source_lesson_id=%d,source_rule_id=%d,source_lesson_type=%s,source_date=%s,source_start_time=%s,source_end_time=%s,source_teacher_id=%d,source_room_id=%d,new_lesson_id=%d",
+			source.ID, source.RuleID, source.LessonType, lessonDateString(source.LessonDate), source.StartTime, source.EndTime, source.TeacherID, source.RoomID, lesson.ID)
+		afterData := fmt.Sprintf("lesson_id=%d,lesson_type=%s,source_lesson_id=%d,lesson_date=%s,start_time=%s,end_time=%s,teacher_id=%d,room_id=%d,teaching_mode=%s,requires_room=%d,status=%s",
+			lesson.ID, lesson.LessonType, lesson.SourceLessonID, lessonDateString(lesson.LessonDate), lesson.StartTime, lesson.EndTime, lesson.TeacherID, lesson.RoomID, lesson.TeachingMode, lesson.RequiresRoom, lesson.Status)
+		changeLog := &models.EduLessonChangeLog{
+			LessonID:   lesson.ID,
+			RuleID:     lesson.RuleID,
+			ActionType: "makeup",
+			BeforeData: beforeData,
+			AfterData:  afterData,
+			Reason:     strings.TrimSpace(req.Reason),
+			OccurredAt: &models.JSONTime{Time: time.Now().UTC()},
+			TenantID:   tenantID,
+		}
+		if err := tx.Create(changeLog).Error; err != nil {
+			return err
+		}
+
+		created = lesson
+		return nil
+	})
+	return created, err
+}
+
 func (s *EduScheduleService) changeLessonStatus(ctx context.Context, tenantID, lessonID uint, targetStatus, actionType, reason string, recheckConflict bool) error {
 	if lessonID == 0 {
 		return errors.New("课次ID不能为空")
