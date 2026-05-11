@@ -29,17 +29,23 @@ func CreateBeforeHook(gormDB *gorm.DB) {
 				row := destValueOf.Index(i)
 				if row.Type().Kind() == reflect.Struct {
 					// 检查是否有TenantID字段，如果有则自动设置
-					if b, column := structHasSpecialField("TenantID", row); b {
+					if b, _ := structHasSpecialField("TenantID", row); b {
 						// 从上下文中获取租户ID
 						if tenantID := GetTenantIDFromContext(gormDB.Statement.Context); tenantID > 0 {
-							destValueOf.Index(i).FieldByName(column).Set(reflect.ValueOf(tenantID))
+							field := destValueOf.Index(i).FieldByName("TenantID")
+							if field.IsValid() && field.CanSet() && field.Kind() == reflect.Uint && field.Uint() == 0 {
+								field.SetUint(uint64(tenantID))
+							}
 						}
 					}
 					// 检查是否有CreatedBy字段，如果有则自动设置
-					if b, column := structHasSpecialField("CreatedBy", row); b {
+					if b, _ := structHasSpecialField("CreatedBy", row); b {
 						// 从上下文中获取用户ID
 						if userID := GetCurrentUserIDFromContext(gormDB.Statement.Context); userID > 0 {
-							destValueOf.Index(i).FieldByName(column).Set(reflect.ValueOf(userID))
+							field := destValueOf.Index(i).FieldByName("CreatedBy")
+							if field.IsValid() && field.CanSet() && field.Kind() == reflect.Uint && field.Uint() == 0 {
+								field.SetUint(uint64(userID))
+							}
 						}
 					}
 				} else if row.Type().Kind() == reflect.Map {
@@ -64,14 +70,20 @@ func CreateBeforeHook(gormDB *gorm.DB) {
 			if b, column := structHasSpecialField("TenantID", gormDB.Statement.Dest); b {
 				// 从上下文中获取租户ID
 				if tenantID := GetTenantIDFromContext(gormDB.Statement.Context); tenantID > 0 {
-					gormDB.Statement.SetColumn(column, tenantID)
+					// 仅在未显式赋值时注入
+					if f := destValueOf.FieldByName("TenantID"); f.IsValid() && f.Kind() == reflect.Uint && f.Uint() == 0 {
+						gormDB.Statement.SetColumn(column, tenantID)
+					}
 				}
 			}
 			// 检查是否有CreatedBy字段，如果有则自动设置
 			if b, column := structHasSpecialField("CreatedBy", gormDB.Statement.Dest); b {
 				// 从上下文中获取用户ID
 				if userID := GetCurrentUserIDFromContext(gormDB.Statement.Context); userID > 0 {
-					gormDB.Statement.SetColumn(column, userID)
+					// 仅在未显式赋值时注入
+					if f := destValueOf.FieldByName("CreatedBy"); f.IsValid() && f.Kind() == reflect.Uint && f.Uint() == 0 {
+						gormDB.Statement.SetColumn(column, userID)
+					}
 				}
 			}
 		} else if destValueOf.Type().Kind() == reflect.Map {
