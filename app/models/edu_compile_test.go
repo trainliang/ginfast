@@ -43,3 +43,10 @@ func TestEduScheduleBenefitFoundationModelsCompile(t *testing.T) {
 	_ = &EduBenefitExternalSync{}
 	_ = &EduLessonStudentEligibility{}
 }
+
+func TestEduScheduleModelsCompile(t *testing.T) {
+	_ = &EduScheduleRule{}
+	_ = &EduLesson{}
+	_ = &EduLessonChangeLog{}
+	_ = &EduScheduleConflictOverride{}
+}
