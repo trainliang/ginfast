@@ -6,12 +6,18 @@ import (
 
 	"gin-fast/app/global/app"
 	"gin-fast/app/global/consts"
-	"gin-fast/app/models"
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 )
+
+type hookTenantRecord struct {
+	ID        uint `gorm:"primarykey"`
+	Name      string
+	TenantID  uint
+	CreatedBy uint
+}
 
 func setupHookTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
@@ -19,7 +25,7 @@ func setupHookTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open sqlite db: %v", err)
 	}
-	if err := db.AutoMigrate(&models.EduCourse{}); err != nil {
+	if err := db.AutoMigrate(&hookTenantRecord{}); err != nil {
 		t.Fatalf("auto migrate: %v", err)
 	}
 
@@ -38,9 +44,9 @@ func TestCreateBeforeHook_BatchCreateSetsTenantID(t *testing.T) {
 	db := setupHookTestDB(t)
 	ctx := contextWithTenant(123)
 
-	rows := []models.EduCourse{
-		{Name: "A", Code: "C001"},
-		{Name: "B", Code: "C002"},
+	rows := []hookTenantRecord{
+		{Name: "A"},
+		{Name: "B"},
 	}
 	if err := db.WithContext(ctx).Create(&rows).Error; err != nil {
 		t.Fatalf("batch create: %v", err)
@@ -56,7 +62,7 @@ func TestCreateBeforeHook_SingleCreateDoesNotOverrideTenantID(t *testing.T) {
 	db := setupHookTestDB(t)
 	ctx := contextWithTenant(123)
 
-	row := &models.EduCourse{Name: "A", Code: "C001", TenantID: 999}
+	row := &hookTenantRecord{Name: "A", TenantID: 999}
 	if err := db.WithContext(ctx).Create(row).Error; err != nil {
 		t.Fatalf("create: %v", err)
 	}
