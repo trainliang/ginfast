@@ -35,6 +35,7 @@ var eduStudentControllers = controllers.NewEduStudentController()           // �
 var eduCourseControllers = controllers.NewEduCourseController()             // 教培课程/项目控制器
 var eduClassControllers = controllers.NewEduClassController()               // 教培班级控制器
 var eduRoomControllers = controllers.NewEduRoomController()                 // 教培教室/场地控制器
+var eduTermControllers = controllers.NewEduTermController()                 // 教培学期控制器
 
 // InitRoutes 初始化路由
 func InitRoutes(engine *gin.Engine) {
@@ -284,6 +285,16 @@ func InitRoutes(engine *gin.Engine) {
 					rooms.POST("/import", eduRoomControllers.Import)
 					rooms.POST("/weekly-rules/import", eduRoomControllers.ImportWeeklyRules)
 					rooms.POST("/exceptions/import", eduRoomControllers.ImportExceptions)
+				}
+
+				terms := edu.Group("/terms")
+				{
+					terms.GET("/list", eduTermControllers.List)
+					terms.POST("/add", eduTermControllers.Add)
+					terms.PUT("/edit", eduTermControllers.Update)
+					terms.DELETE("/delete", eduTermControllers.Delete)
+					terms.GET("/:id/closed-days", eduTermControllers.ClosedDays)
+					terms.POST("/:id/closed-days/save", eduTermControllers.SaveClosedDays)
 				}
 			}
 
