@@ -36,6 +36,7 @@ var eduCourseControllers = controllers.NewEduCourseController()             // �
 var eduClassControllers = controllers.NewEduClassController()               // 教培班级控制器
 var eduRoomControllers = controllers.NewEduRoomController()                 // 教培教室/场地控制器
 var eduTermControllers = controllers.NewEduTermController()                 // 教培学期控制器
+var eduBenefitControllers = controllers.NewEduBenefitController()           // 教培权益中心控制器
 
 // InitRoutes 初始化路由
 func InitRoutes(engine *gin.Engine) {
@@ -295,6 +296,34 @@ func InitRoutes(engine *gin.Engine) {
 					terms.DELETE("/delete", eduTermControllers.Delete)
 					terms.GET("/:id/closed-days", eduTermControllers.ClosedDays)
 					terms.POST("/:id/closed-days/save", eduTermControllers.SaveClosedDays)
+				}
+
+				benefitProducts := edu.Group("/benefit-products")
+				{
+					benefitProducts.GET("/list", eduBenefitControllers.ProductList)
+					benefitProducts.POST("/add", eduBenefitControllers.AddProduct)
+					benefitProducts.PUT("/edit", eduBenefitControllers.UpdateProduct)
+					benefitProducts.DELETE("/delete", eduBenefitControllers.DeleteProduct)
+				}
+
+				studentBenefits := edu.Group("/student-benefits")
+				{
+					studentBenefits.GET("/list", eduBenefitControllers.StudentBenefitList)
+					studentBenefits.POST("/add", eduBenefitControllers.AddStudentBenefit)
+					studentBenefits.PUT("/edit", eduBenefitControllers.UpdateStudentBenefit)
+					studentBenefits.POST("/check", eduBenefitControllers.Check)
+					studentBenefits.POST("/repair-schedule", eduBenefitControllers.RepairSchedule)
+				}
+
+				benefitLedgers := edu.Group("/benefit-ledgers")
+				{
+					benefitLedgers.GET("/list", eduBenefitControllers.LedgerList)
+				}
+
+				benefitExternalSync := edu.Group("/benefit-external-sync")
+				{
+					benefitExternalSync.GET("/list", eduBenefitControllers.ExternalSyncList)
+					benefitExternalSync.POST("/retry", eduBenefitControllers.RetryExternalSync)
 				}
 			}
 
