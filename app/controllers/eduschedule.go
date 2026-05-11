@@ -127,6 +127,7 @@ func (ctl *EduScheduleController) CheckConflicts(c *gin.Context) {
 
 func buildEduScheduleRuleFromAddRequest(req *models.EduScheduleRuleAddRequest, tenantID, userID uint) *models.EduScheduleRule {
 	rule := &models.EduScheduleRule{
+		Name:          req.Name,
 		RuleType:      req.RuleType,
 		RepeatType:    req.RepeatType,
 		TermID:        req.TermID,
@@ -145,6 +146,7 @@ func buildEduScheduleRuleFromAddRequest(req *models.EduScheduleRuleAddRequest, t
 		Status:        1,
 		Version:       1,
 		EffectiveFrom: req.EffectiveFrom,
+		Remark:        req.Remark,
 		CreatedBy:     userID,
 		TenantID:      tenantID,
 	}
@@ -171,6 +173,9 @@ func buildEduScheduleRuleListScope(req *models.EduScheduleRuleListRequest, tenan
 		}
 		if req.ID != nil {
 			db = db.Where("id = ?", *req.ID)
+		}
+		if req.Name != "" {
+			db = db.Where("name LIKE ?", "%"+req.Name+"%")
 		}
 		if req.RuleType != "" {
 			db = db.Where("rule_type = ?", req.RuleType)

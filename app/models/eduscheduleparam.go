@@ -6,6 +6,7 @@ type EduScheduleRuleListRequest struct {
 	BasePaging
 	Validator
 	ID         *uint  `form:"id" json:"id"`
+	Name       string `form:"name" json:"name"`
 	RuleType   string `form:"ruleType" json:"ruleType"`
 	RepeatType string `form:"repeatType" json:"repeatType"`
 	ClassID    *uint  `form:"classId" json:"classId"`
@@ -19,6 +20,7 @@ func (r *EduScheduleRuleListRequest) Validate(c *gin.Context) error { return r.V
 
 type EduScheduleRuleAddRequest struct {
 	Validator
+	Name          string    `form:"name" json:"name" validate:"required" message:"规则名称不能为空"`
 	RuleType      string    `form:"ruleType" json:"ruleType" validate:"required" message:"规则类型不能为空"`
 	RepeatType    string    `form:"repeatType" json:"repeatType" validate:"required" message:"重复类型不能为空"`
 	TermID        uint      `form:"termId" json:"termId"`
@@ -37,6 +39,7 @@ type EduScheduleRuleAddRequest struct {
 	Status        *int8     `form:"status" json:"status"`
 	Version       *int      `form:"version" json:"version"`
 	EffectiveFrom *JSONTime `form:"effectiveFrom" json:"effectiveFrom"`
+	Remark        string    `form:"remark" json:"remark"`
 }
 
 func (r *EduScheduleRuleAddRequest) Validate(c *gin.Context) error { return r.Validator.Check(c, r) }

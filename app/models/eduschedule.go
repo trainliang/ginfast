@@ -10,6 +10,7 @@ import (
 // EduScheduleRule 排课规则模型
 type EduScheduleRule struct {
 	BaseModel
+	Name          string    `gorm:"column:name;size:100;not null;comment:规则名称" json:"name"`
 	RuleType      string    `gorm:"column:rule_type;size:32;not null;comment:规则类型 class/one_to_one" json:"ruleType"`
 	RepeatType    string    `gorm:"column:repeat_type;size:32;not null;comment:重复类型 single/weekly" json:"repeatType"`
 	TermID        uint      `gorm:"column:term_id;default:0;comment:学期ID" json:"termId"`
@@ -28,6 +29,7 @@ type EduScheduleRule struct {
 	Status        int8      `gorm:"column:status;default:1;comment:状态" json:"status"`
 	Version       int       `gorm:"column:version;default:1;comment:版本" json:"version"`
 	EffectiveFrom *JSONTime `gorm:"column:effective_from;comment:生效开始时间" json:"effectiveFrom"`
+	Remark        string    `gorm:"column:remark;size:500;comment:备注" json:"remark"`
 	CreatedBy     uint      `gorm:"column:created_by;default:0;comment:创建人" json:"createdBy"`
 	TenantID      uint      `gorm:"type:int(11);column:tenant_id;comment:租户ID" json:"tenantID"`
 }
