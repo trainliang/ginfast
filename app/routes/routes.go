@@ -37,6 +37,7 @@ var eduClassControllers = controllers.NewEduClassController()               // �
 var eduRoomControllers = controllers.NewEduRoomController()                 // 教培教室/场地控制器
 var eduTermControllers = controllers.NewEduTermController()                 // 教培学期控制器
 var eduBenefitControllers = controllers.NewEduBenefitController()           // 教培权益中心控制器
+var eduScheduleControllers = controllers.NewEduScheduleController()         // 教培排课控制器
 
 // InitRoutes 初始化路由
 func InitRoutes(engine *gin.Engine) {
@@ -324,6 +325,26 @@ func InitRoutes(engine *gin.Engine) {
 				{
 					benefitExternalSync.GET("/list", eduBenefitControllers.ExternalSyncList)
 					benefitExternalSync.POST("/retry", eduBenefitControllers.RetryExternalSync)
+				}
+
+				scheduleRules := edu.Group("/schedule-rules")
+				{
+					scheduleRules.GET("/list", eduScheduleControllers.RuleList)
+					scheduleRules.POST("/add", eduScheduleControllers.RuleAdd)
+					scheduleRules.PUT("/edit", eduScheduleControllers.RuleUpdate)
+					scheduleRules.POST("/preview-change", eduScheduleControllers.RulePreviewChange)
+					scheduleRules.DELETE("/delete", eduScheduleControllers.RuleDelete)
+				}
+
+				lessons := edu.Group("/lessons")
+				{
+					lessons.GET("/calendar", eduScheduleControllers.LessonCalendar)
+					lessons.GET("/list", eduScheduleControllers.LessonList)
+				}
+
+				schedules := edu.Group("/schedules")
+				{
+					schedules.POST("/check-conflicts", eduScheduleControllers.CheckConflicts)
 				}
 			}
 
