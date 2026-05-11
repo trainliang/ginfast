@@ -103,6 +103,49 @@ func TestPostgreSQLSchemaIncludesEduBenefitFoundationPatch(t *testing.T) {
 	}
 }
 
+func TestPostgreSQLSchemaIncludesEduScheduleRulesPatch(t *testing.T) {
+	sqlBytes, err := os.ReadFile("patches/2026-05-11-edu-schedule-rules-postgresql.sql")
+	if err != nil {
+		t.Fatalf("read edu schedule rules patch: %v", err)
+	}
+	sqlText := string(sqlBytes)
+
+	requiredSnippets := []string{
+		"CREATE TABLE IF NOT EXISTS edu_schedule_rule",
+		"CREATE TABLE IF NOT EXISTS edu_lesson",
+		"CREATE TABLE IF NOT EXISTS edu_lesson_change_log",
+		"CREATE TABLE IF NOT EXISTS edu_schedule_conflict_override",
+		"(tenant_id, rule_type)",
+		"(tenant_id, lesson_date)",
+		"(tenant_id, teacher_id, lesson_date)",
+		"(tenant_id, room_id, lesson_date)",
+		"(tenant_id, student_id, lesson_date)",
+		"(tenant_id, class_id, lesson_date)",
+		"INSERT INTO sys_api (id, title, path, method, api_group, created_at, updated_at, deleted_at, created_by) VALUES",
+		"'/api/edu/schedule-rules/list', 'GET'",
+		"'/api/edu/schedule-rules/add', 'POST'",
+		"'/api/edu/schedule-rules/edit', 'PUT'",
+		"'/api/edu/schedule-rules/preview-change', 'POST'",
+		"'/api/edu/schedule-rules/delete', 'DELETE'",
+		"'/api/edu/lessons/calendar', 'GET'",
+		"'/api/edu/lessons/list', 'GET'",
+		"'/api/edu/schedules/check-conflicts', 'POST'",
+		"INSERT INTO sys_menu (id, parent_id, path, name, redirect, component, title, is_full, hide, disable, keep_alive, affix, link, iframe, svg_icon, icon, sort, type, is_link, permission, created_at, updated_at, deleted_at, created_by) VALUES",
+		"'/edu/schedule', 'EduSchedule', '', 'edu/schedule/schedule', '排课管理'",
+		"INSERT INTO sys_menu_api (menu_id, api_id) VALUES",
+		"INSERT INTO sys_casbin_rule (ptype, v0, v1, v2, v3, v4, v5)",
+		"UPDATE sys_tenants",
+		"SELECT setval('sys_api_id_seq', GREATEST((SELECT last_value FROM sys_api_id_seq), 289), true)",
+		"SELECT setval('sys_menu_id_seq', GREATEST((SELECT last_value FROM sys_menu_id_seq), 140412), true)",
+	}
+
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(sqlText, snippet) {
+			t.Fatalf("edu schedule rules patch missing required snippet: %s", snippet)
+		}
+	}
+}
+
 func TestPostgreSQLConvertedIncludesEducationFoundationSeed(t *testing.T) {
 	sqlBytes, err := os.ReadFile("postgresql_converted.sql")
 	if err != nil {
