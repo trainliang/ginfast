@@ -34,6 +34,9 @@ func (s *EduClassService) Create(ctx context.Context, class *models.EduClass) er
 		tenantID = tenantIDFromContext(ctx)
 		class.TenantID = tenantID
 	}
+	if err := ensureTenantID(tenantID); err != nil {
+		return err
+	}
 	return app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var count int64
 		if err := requireTenant(tx.Model(&models.EduClass{}), tenantID).Where("code = ?", class.Code).Count(&count).Error; err != nil {
@@ -67,8 +70,17 @@ func (s *EduClassService) Update(ctx context.Context, class *models.EduClass) er
 		tenantID = tenantIDFromContext(ctx)
 		class.TenantID = tenantID
 	}
+	if err := ensureTenantID(tenantID); err != nil {
+		return err
+	}
 	return app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var count int64
+		if err := requireTenant(tx.Model(&models.EduClass{}), tenantID).Where("id = ?", class.ID).Count(&count).Error; err != nil {
+			return err
+		}
+		if count == 0 {
+			return fmt.Errorf("班级不存在或不属于当前租户")
+		}
 		if err := requireTenant(tx.Model(&models.EduClass{}), tenantID).Where("code = ? AND id <> ?", class.Code, class.ID).Count(&count).Error; err != nil {
 			return err
 		}
@@ -83,6 +95,9 @@ func (s *EduClassService) Update(ctx context.Context, class *models.EduClass) er
 }
 
 func (s *EduClassService) Delete(ctx context.Context, tenantID, id uint) error {
+	if err := ensureTenantID(tenantID); err != nil {
+		return err
+	}
 	return app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var count int64
 		if err := requireTenant(tx.Model(&models.EduClassMember{}), tenantID).Where("class_id = ? AND status IN ?", id, []string{"studying", "paused"}).Count(&count).Error; err != nil {
@@ -104,6 +119,9 @@ func (s *EduClassService) UpdateMember(ctx context.Context, member *models.EduCl
 }
 
 func (s *EduClassService) DeleteMember(ctx context.Context, tenantID, id uint) error {
+	if err := ensureTenantID(tenantID); err != nil {
+		return err
+	}
 	return requireTenant(app.DB().WithContext(ctx).Where("id = ?", id), tenantID).Delete(&models.EduClassMember{}).Error
 }
 
@@ -124,6 +142,9 @@ func (s *EduClassService) saveMemberTx(tx *gorm.DB, member *models.EduClassMembe
 	if tenantID == 0 {
 		tenantID = tenantIDFromContext(tx.Statement.Context)
 		member.TenantID = tenantID
+	}
+	if err := ensureTenantID(tenantID); err != nil {
+		return err
 	}
 	var class models.EduClass
 	if err := requireTenant(tx.Model(&models.EduClass{}), tenantID).Where("id = ?", member.ClassID).First(&class).Error; err != nil {
@@ -171,6 +192,9 @@ func (s *EduClassService) saveMemberTx(tx *gorm.DB, member *models.EduClassMembe
 
 func (s *EduClassService) ImportRows(ctx context.Context, tenantID uint, rows []models.EduClassImportRow) (*EduImportResult, error) {
 	result := &EduImportResult{}
+	if err := ensureTenantID(tenantID); err != nil {
+		return result, err
+	}
 	err := app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for i, row := range rows {
 			if strings.EqualFold(row.ClassType, "one_to_one") || strings.Contains(row.ClassType, "一对一") {
@@ -237,6 +261,9 @@ func (s *EduClassService) ImportRows(ctx context.Context, tenantID uint, rows []
 
 func (s *EduClassService) ImportMemberRows(ctx context.Context, tenantID uint, rows []models.EduClassMemberImportRow) (*EduImportResult, error) {
 	result := &EduImportResult{}
+	if err := ensureTenantID(tenantID); err != nil {
+		return result, err
+	}
 	err := app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for i, row := range rows {
 			member := &models.EduClassMember{ClassID: row.ClassID, StudentID: row.StudentID, Status: row.Status, TenantID: tenantID}
@@ -259,6 +286,9 @@ func (s *EduClassService) ImportMemberRows(ctx context.Context, tenantID uint, r
 }
 
 func (s *EduClassService) ExportRows(ctx context.Context, tenantID uint, ids []uint) ([]models.EduClassExportRow, error) {
+	if err := ensureTenantID(tenantID); err != nil {
+		return nil, err
+	}
 	var list []models.EduClass
 	db := requireTenant(app.DB().WithContext(ctx).Model(&models.EduClass{}), tenantID)
 	if len(ids) > 0 {
@@ -275,6 +305,9 @@ func (s *EduClassService) ExportRows(ctx context.Context, tenantID uint, ids []u
 }
 
 func (s *EduClassService) ExportMemberRows(ctx context.Context, tenantID uint, ids []uint) ([]models.EduClassMemberExportRow, error) {
+	if err := ensureTenantID(tenantID); err != nil {
+		return nil, err
+	}
 	var list []models.EduClassMember
 	db := requireTenant(app.DB().WithContext(ctx).Model(&models.EduClassMember{}), tenantID)
 	if len(ids) > 0 {
@@ -291,13 +324,16 @@ func (s *EduClassService) ExportMemberRows(ctx context.Context, tenantID uint, i
 }
 
 func (s *EduClassService) TeacherOptions(ctx context.Context, tenantID uint) ([]models.EduTeacherOption, error) {
+	if err := ensureTenantID(tenantID); err != nil {
+		return nil, err
+	}
 	var users []models.User
 	err := app.DB().WithContext(ctx).Model(&models.User{}).
 		Where("sys_users.tenant_id = ?", tenantID).
 		Select("DISTINCT sys_users.id, sys_users.username, sys_users.nick_name").
 		Joins("JOIN sys_user_role sur ON sur.user_id = sys_users.id").
-		Joins("JOIN sys_role r ON r.id = sur.role_id").
-		Where("r.name = ?", "教师").
+		Joins("JOIN edu_teacher_role_config etrc ON etrc.role_id = sur.role_id AND etrc.tenant_id = ?", tenantID).
+		Joins("JOIN sys_role r ON r.id = etrc.role_id AND r.tenant_id = ? AND r.status = 1", tenantID).
 		Find(&users).Error
 	if err != nil {
 		return nil, err
@@ -307,6 +343,58 @@ func (s *EduClassService) TeacherOptions(ctx context.Context, tenantID uint) ([]
 		opts = append(opts, models.EduTeacherOption{ID: user.ID, Username: user.Username, NickName: user.NickName, Name: user.NickName})
 	}
 	return opts, nil
+}
+
+func (s *EduClassService) TeacherRoleConfig(ctx context.Context, tenantID uint) (*models.EduTeacherRoleConfigResponse, error) {
+	if err := ensureTenantID(tenantID); err != nil {
+		return nil, err
+	}
+	var roles []models.SysRole
+	if err := app.DB().WithContext(ctx).Where("tenant_id = ?", tenantID).Order("sort ASC, id ASC").Find(&roles).Error; err != nil {
+		return nil, err
+	}
+	var configs []models.EduTeacherRoleConfig
+	if err := app.DB().WithContext(ctx).Where("tenant_id = ?", tenantID).Order("role_id ASC").Find(&configs).Error; err != nil {
+		return nil, err
+	}
+	resp := &models.EduTeacherRoleConfigResponse{
+		Roles:           make([]models.EduTeacherRoleConfigRoleItem, 0, len(roles)),
+		SelectedRoleIDs: make([]uint, 0, len(configs)),
+	}
+	for _, role := range roles {
+		resp.Roles = append(resp.Roles, models.EduTeacherRoleConfigRoleItem{ID: role.ID, Name: role.Name, Status: role.Status, TenantID: role.TenantID})
+	}
+	for _, config := range configs {
+		resp.SelectedRoleIDs = append(resp.SelectedRoleIDs, config.RoleID)
+	}
+	return resp, nil
+}
+
+func (s *EduClassService) SaveTeacherRoleConfig(ctx context.Context, tenantID uint, roleIDs []uint, userID uint) error {
+	if err := ensureTenantID(tenantID); err != nil {
+		return err
+	}
+	uniqueRoleIDs := dedupeUint(roleIDs)
+	return app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if len(uniqueRoleIDs) > 0 {
+			var count int64
+			if err := tx.Model(&models.SysRole{}).Where("tenant_id = ? AND status = 1 AND id IN ?", tenantID, uniqueRoleIDs).Count(&count).Error; err != nil {
+				return err
+			}
+			if count != int64(len(uniqueRoleIDs)) {
+				return errors.New("教师角色只能选择当前租户启用角色")
+			}
+		}
+		if err := tx.Unscoped().Where("tenant_id = ?", tenantID).Delete(&models.EduTeacherRoleConfig{}).Error; err != nil {
+			return err
+		}
+		for _, roleID := range uniqueRoleIDs {
+			if err := tx.Create(&models.EduTeacherRoleConfig{RoleID: roleID, CreatedBy: userID, TenantID: tenantID}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func validateClassReferences(tx *gorm.DB, tenantID, courseID, teacherID, roomID uint) error {
@@ -327,6 +415,16 @@ func validateClassReferences(tx *gorm.DB, tenantID, courseID, teacherID, roomID 
 		if count == 0 {
 			return fmt.Errorf("教师不存在或不属于当前租户")
 		}
+		if err := tx.Model(&models.SysUserRole{}).
+			Joins("JOIN edu_teacher_role_config etrc ON etrc.role_id = sys_user_role.role_id AND etrc.tenant_id = ?", tenantID).
+			Joins("JOIN sys_role r ON r.id = etrc.role_id AND r.tenant_id = ? AND r.status = 1", tenantID).
+			Where("sys_user_role.user_id = ?", teacherID).
+			Count(&count).Error; err != nil {
+			return err
+		}
+		if count == 0 {
+			return fmt.Errorf("教师未关联当前租户配置的教师角色")
+		}
 	}
 	if roomID > 0 {
 		var count int64
@@ -338,6 +436,22 @@ func validateClassReferences(tx *gorm.DB, tenantID, courseID, teacherID, roomID 
 		}
 	}
 	return nil
+}
+
+func dedupeUint(values []uint) []uint {
+	seen := make(map[uint]struct{}, len(values))
+	result := make([]uint, 0, len(values))
+	for _, value := range values {
+		if value == 0 {
+			continue
+		}
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
 }
 
 func roomIDOrZero(roomID *uint) uint {

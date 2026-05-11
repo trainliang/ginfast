@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -42,6 +43,13 @@ func requireTenant(db *gorm.DB, tenantID uint) *gorm.DB {
 		return db.Where("1 = 0")
 	}
 	return db.Where("tenant_id = ?", tenantID)
+}
+
+func ensureTenantID(tenantID uint) error {
+	if tenantID == 0 {
+		return errors.New("当前处于全局租户，禁止维护租户业务数据，请先切换到具体租户")
+	}
+	return nil
 }
 
 func isActiveMemberStatus(status string) bool {

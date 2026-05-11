@@ -20,6 +20,9 @@ func (s *EduCourseService) Create(ctx context.Context, course *models.EduCourse)
 	if course == nil {
 		return errors.New("课程不能为空")
 	}
+	if err := ensureTenantID(course.TenantID); err != nil {
+		return err
+	}
 	return app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var count int64
 		if err := requireTenant(tx.Model(&models.EduCourse{}), course.TenantID).Where("code = ?", course.Code).Count(&count).Error; err != nil {
@@ -36,8 +39,17 @@ func (s *EduCourseService) Update(ctx context.Context, course *models.EduCourse)
 	if course == nil {
 		return errors.New("课程不能为空")
 	}
+	if err := ensureTenantID(course.TenantID); err != nil {
+		return err
+	}
 	return app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var count int64
+		if err := requireTenant(tx.Model(&models.EduCourse{}), course.TenantID).Where("id = ?", course.ID).Count(&count).Error; err != nil {
+			return err
+		}
+		if count == 0 {
+			return fmt.Errorf("课程不存在或不属于当前租户")
+		}
 		if err := requireTenant(tx.Model(&models.EduCourse{}), course.TenantID).Where("code = ? AND id <> ?", course.Code, course.ID).Count(&count).Error; err != nil {
 			return err
 		}
@@ -49,6 +61,9 @@ func (s *EduCourseService) Update(ctx context.Context, course *models.EduCourse)
 }
 
 func (s *EduCourseService) Delete(ctx context.Context, tenantID, id uint) error {
+	if err := ensureTenantID(tenantID); err != nil {
+		return err
+	}
 	return app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var count int64
 		if err := requireTenant(tx.Model(&models.EduClass{}), tenantID).Where("course_id = ?", id).Count(&count).Error; err != nil {
@@ -63,6 +78,9 @@ func (s *EduCourseService) Delete(ctx context.Context, tenantID, id uint) error 
 
 func (s *EduCourseService) ImportRows(ctx context.Context, tenantID uint, rows []models.EduCourseImportRow) (*EduImportResult, error) {
 	result := &EduImportResult{Success: false}
+	if err := ensureTenantID(tenantID); err != nil {
+		return result, err
+	}
 	if len(rows) == 0 {
 		result.Success = true
 		return result, nil
@@ -139,6 +157,9 @@ func (s *EduCourseService) ImportRows(ctx context.Context, tenantID uint, rows [
 }
 
 func (s *EduCourseService) ExportRows(ctx context.Context, tenantID uint, ids []uint) ([]models.EduCourseExportRow, error) {
+	if err := ensureTenantID(tenantID); err != nil {
+		return nil, err
+	}
 	var courses []models.EduCourse
 	db := requireTenant(app.DB().WithContext(ctx).Model(&models.EduCourse{}), tenantID)
 	if len(ids) > 0 {

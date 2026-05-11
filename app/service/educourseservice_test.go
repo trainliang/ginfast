@@ -23,3 +23,24 @@ func TestEduCourseServiceRejectsDuplicateCodeWithinTenant(t *testing.T) {
 		t.Fatalf("expected duplicate code error")
 	}
 }
+
+func TestEduCourseServiceRejectsZeroTenantCreate(t *testing.T) {
+	setupEduTestDB(t)
+	svc := NewEduCourseService()
+	err := svc.Create(contextWithTenant(0), &models.EduCourse{Name: "A", Code: "C001", TenantID: 0})
+	if err == nil {
+		t.Fatalf("expected zero tenant create to be rejected")
+	}
+}
+
+func TestEduCourseServiceRejectsCrossTenantUpdate(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduCourseService()
+	if err := db.Create(&models.EduCourse{Name: "A", Code: "C001", TenantID: 0}).Error; err != nil {
+		t.Fatalf("seed course: %v", err)
+	}
+	err := svc.Update(contextWithTenant(1), &models.EduCourse{BaseModel: models.BaseModel{ID: 1}, Name: "A", Code: "C001", TenantID: 1})
+	if err == nil {
+		t.Fatalf("expected cross tenant update to be rejected")
+	}
+}

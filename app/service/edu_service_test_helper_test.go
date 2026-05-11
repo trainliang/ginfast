@@ -30,6 +30,7 @@ func setupEduTestDB(t *testing.T) *gorm.DB {
 		&models.EduRoom{},
 		&models.EduRoomWeeklyRule{},
 		&models.EduRoomException{},
+		&models.EduTeacherRoleConfig{},
 		&models.User{},
 		&models.SysRole{},
 		&models.SysUserRole{},

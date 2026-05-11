@@ -59,7 +59,7 @@ func (ctl *EduClassController) Add(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	class := buildClassFromAddRequest(&req, ctl.GetCurrentTenantID(c), ctl.GetCurrentUserID(c))
+	class := buildClassFromAddRequest(&req, ctl.RequireTenant(c), ctl.GetCurrentUserID(c))
 	if err := ctl.EduClassService.Create(c, class); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
@@ -71,7 +71,7 @@ func (ctl *EduClassController) Update(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	class := buildClassFromUpdateRequest(&req, ctl.GetCurrentTenantID(c), ctl.GetCurrentUserID(c))
+	class := buildClassFromUpdateRequest(&req, ctl.RequireTenant(c), ctl.GetCurrentUserID(c))
 	if err := ctl.EduClassService.Update(c, class); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
@@ -83,7 +83,7 @@ func (ctl *EduClassController) Delete(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	if err := ctl.EduClassService.Delete(c, ctl.GetCurrentTenantID(c), req.ID); err != nil {
+	if err := ctl.EduClassService.Delete(c, ctl.RequireTenant(c), req.ID); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
 	ctl.SuccessWithMessage(c, "班级删除成功", nil)
@@ -117,7 +117,7 @@ func (ctl *EduClassController) AddMember(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	member := buildClassMemberFromAddRequest(&req, ctl.GetCurrentTenantID(c), ctl.GetCurrentUserID(c))
+	member := buildClassMemberFromAddRequest(&req, ctl.RequireTenant(c), ctl.GetCurrentUserID(c))
 	if err := ctl.EduClassService.AddMember(c, member); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
@@ -129,7 +129,7 @@ func (ctl *EduClassController) UpdateMember(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	member := buildClassMemberFromUpdateRequest(&req, ctl.GetCurrentTenantID(c), ctl.GetCurrentUserID(c))
+	member := buildClassMemberFromUpdateRequest(&req, ctl.RequireTenant(c), ctl.GetCurrentUserID(c))
 	if err := ctl.EduClassService.UpdateMember(c, member); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
@@ -141,18 +141,37 @@ func (ctl *EduClassController) DeleteMember(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	if err := ctl.EduClassService.DeleteMember(c, ctl.GetCurrentTenantID(c), req.ID); err != nil {
+	if err := ctl.EduClassService.DeleteMember(c, ctl.RequireTenant(c), req.ID); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
 	ctl.SuccessWithMessage(c, "班级成员删除成功", nil)
 }
 
 func (ctl *EduClassController) TeacherOptions(c *gin.Context) {
-	list, err := ctl.EduClassService.TeacherOptions(c, ctl.GetCurrentTenantID(c))
+	list, err := ctl.EduClassService.TeacherOptions(c, ctl.RequireTenant(c))
 	if err != nil {
 		ctl.FailAndAbort(c, "获取教师选项失败", err)
 	}
 	ctl.Success(c, gin.H{"list": list})
+}
+
+func (ctl *EduClassController) TeacherRoleConfig(c *gin.Context) {
+	config, err := ctl.EduClassService.TeacherRoleConfig(c, ctl.RequireTenant(c))
+	if err != nil {
+		ctl.FailAndAbort(c, "获取教师角色配置失败", err)
+	}
+	ctl.Success(c, config)
+}
+
+func (ctl *EduClassController) SaveTeacherRoleConfig(c *gin.Context) {
+	var req models.EduTeacherRoleConfigRequest
+	if err := req.Validate(c); err != nil {
+		ctl.FailAndAbort(c, err.Error(), err)
+	}
+	if err := ctl.EduClassService.SaveTeacherRoleConfig(c, ctl.RequireTenant(c), req.RoleIDs, ctl.GetCurrentUserID(c)); err != nil {
+		ctl.FailAndAbort(c, err.Error(), err)
+	}
+	ctl.SuccessWithMessage(c, "教师角色配置保存成功", nil)
 }
 
 func (ctl *EduClassController) Import(c *gin.Context) {
@@ -160,7 +179,7 @@ func (ctl *EduClassController) Import(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	result, err := ctl.EduClassService.ImportRows(c, ctl.GetCurrentTenantID(c), req.Rows)
+	result, err := ctl.EduClassService.ImportRows(c, ctl.RequireTenant(c), req.Rows)
 	if err != nil && len(result.Errors) == 0 {
 		ctl.FailAndAbort(c, "导入班级失败", err)
 	}
@@ -172,7 +191,7 @@ func (ctl *EduClassController) ImportMembers(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	result, err := ctl.EduClassService.ImportMemberRows(c, ctl.GetCurrentTenantID(c), req.Rows)
+	result, err := ctl.EduClassService.ImportMemberRows(c, ctl.RequireTenant(c), req.Rows)
 	if err != nil && len(result.Errors) == 0 {
 		ctl.FailAndAbort(c, "导入班级成员失败", err)
 	}
@@ -184,7 +203,7 @@ func (ctl *EduClassController) Export(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	rows, err := ctl.EduClassService.ExportRows(c, ctl.GetCurrentTenantID(c), req.IDs)
+	rows, err := ctl.EduClassService.ExportRows(c, ctl.RequireTenant(c), req.IDs)
 	if err != nil {
 		ctl.FailAndAbort(c, "导出班级失败", err)
 	}
@@ -196,7 +215,7 @@ func (ctl *EduClassController) ExportMembers(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	rows, err := ctl.EduClassService.ExportMemberRows(c, ctl.GetCurrentTenantID(c), req.IDs)
+	rows, err := ctl.EduClassService.ExportMemberRows(c, ctl.RequireTenant(c), req.IDs)
 	if err != nil {
 		ctl.FailAndAbort(c, "导出班级成员失败", err)
 	}

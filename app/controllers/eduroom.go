@@ -69,7 +69,7 @@ func (ctl *EduRoomController) Add(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	room := buildRoomFromAddRequest(&req, ctl.GetCurrentTenantID(c), ctl.GetCurrentUserID(c))
+	room := buildRoomFromAddRequest(&req, ctl.RequireTenant(c), ctl.GetCurrentUserID(c))
 	if err := ctl.EduRoomService.Create(c, room); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
@@ -81,7 +81,7 @@ func (ctl *EduRoomController) Update(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	room := buildRoomFromUpdateRequest(&req, ctl.GetCurrentTenantID(c), ctl.GetCurrentUserID(c))
+	room := buildRoomFromUpdateRequest(&req, ctl.RequireTenant(c), ctl.GetCurrentUserID(c))
 	if err := ctl.EduRoomService.Update(c, room); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
@@ -93,7 +93,7 @@ func (ctl *EduRoomController) Delete(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	if err := ctl.EduRoomService.Delete(c, ctl.GetCurrentTenantID(c), req.ID); err != nil {
+	if err := ctl.EduRoomService.Delete(c, ctl.RequireTenant(c), req.ID); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
 	ctl.SuccessWithMessage(c, "场地删除成功", nil)
@@ -130,7 +130,7 @@ func (ctl *EduRoomController) SaveWeeklyRules(c *gin.Context) {
 			req.Rows[i].RoomID = roomID
 		}
 	}
-	result, err := ctl.EduRoomService.SaveWeeklyRules(c, ctl.GetCurrentTenantID(c), req.Rows)
+	result, err := ctl.EduRoomService.SaveWeeklyRules(c, ctl.RequireTenant(c), req.Rows)
 	if err != nil && len(result.Errors) == 0 {
 		ctl.FailAndAbort(c, "保存场地周规则失败", err)
 	}
@@ -166,7 +166,7 @@ func (ctl *EduRoomController) AddException(c *gin.Context) {
 	} else if roomID > 0 {
 		req.RoomID = roomID
 	}
-	exception := buildRoomExceptionFromAddRequest(&req, ctl.GetCurrentTenantID(c), ctl.GetCurrentUserID(c))
+	exception := buildRoomExceptionFromAddRequest(&req, ctl.RequireTenant(c), ctl.GetCurrentUserID(c))
 	if err := ctl.EduRoomService.AddException(c, exception); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
@@ -183,7 +183,7 @@ func (ctl *EduRoomController) UpdateException(c *gin.Context) {
 	} else if roomID > 0 {
 		req.RoomID = roomID
 	}
-	exception := buildRoomExceptionFromUpdateRequest(&req, ctl.GetCurrentTenantID(c), ctl.GetCurrentUserID(c))
+	exception := buildRoomExceptionFromUpdateRequest(&req, ctl.RequireTenant(c), ctl.GetCurrentUserID(c))
 	if err := ctl.EduRoomService.UpdateException(c, exception); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
@@ -195,7 +195,7 @@ func (ctl *EduRoomController) DeleteException(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	if err := ctl.EduRoomService.DeleteException(c, ctl.GetCurrentTenantID(c), req.ID); err != nil {
+	if err := ctl.EduRoomService.DeleteException(c, ctl.RequireTenant(c), req.ID); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
 	ctl.SuccessWithMessage(c, "场地例外日期删除成功", nil)
@@ -206,7 +206,7 @@ func (ctl *EduRoomController) Import(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	result, err := ctl.EduRoomService.ImportRows(c, ctl.GetCurrentTenantID(c), req.Rows)
+	result, err := ctl.EduRoomService.ImportRows(c, ctl.RequireTenant(c), req.Rows)
 	if err != nil && len(result.Errors) == 0 {
 		ctl.FailAndAbort(c, "导入场地失败", err)
 	}
@@ -218,7 +218,7 @@ func (ctl *EduRoomController) ImportWeeklyRules(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	result, err := ctl.EduRoomService.ImportWeeklyRows(c, ctl.GetCurrentTenantID(c), req.Rows)
+	result, err := ctl.EduRoomService.ImportWeeklyRows(c, ctl.RequireTenant(c), req.Rows)
 	if err != nil && len(result.Errors) == 0 {
 		ctl.FailAndAbort(c, "导入场地周规则失败", err)
 	}
@@ -230,7 +230,7 @@ func (ctl *EduRoomController) ImportExceptions(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	result, err := ctl.EduRoomService.ImportExceptionRows(c, ctl.GetCurrentTenantID(c), req.Rows)
+	result, err := ctl.EduRoomService.ImportExceptionRows(c, ctl.RequireTenant(c), req.Rows)
 	if err != nil && len(result.Errors) == 0 {
 		ctl.FailAndAbort(c, "导入场地例外日期失败", err)
 	}
@@ -242,7 +242,7 @@ func (ctl *EduRoomController) Export(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	rows, err := ctl.EduRoomService.ExportRows(c, ctl.GetCurrentTenantID(c), req.IDs)
+	rows, err := ctl.EduRoomService.ExportRows(c, ctl.RequireTenant(c), req.IDs)
 	if err != nil {
 		ctl.FailAndAbort(c, "导出场地失败", err)
 	}

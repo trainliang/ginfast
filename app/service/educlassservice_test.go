@@ -64,6 +64,100 @@ func TestEduClassServiceRejectsOneOnOneClassType(t *testing.T) {
 	}
 }
 
+func TestEduClassServiceRejectsZeroTenantCreate(t *testing.T) {
+	setupEduTestDB(t)
+	svc := NewEduClassService()
+	err := svc.Create(contextWithTenant(0), &models.EduClass{Name: "班级", Code: "CL001", ClassType: "group", CourseID: 1, TeacherID: 1, Capacity: 1, TenantID: 0})
+	if err == nil {
+		t.Fatalf("expected zero tenant create to be rejected")
+	}
+}
+
+func TestEduClassServiceRejectsCrossTenantUpdate(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduClassService()
+	if err := db.Create(&models.EduClass{Name: "班级", Code: "CL001", ClassType: "group", CourseID: 1, TeacherID: 1, Capacity: 1, TenantID: 0}).Error; err != nil {
+		t.Fatalf("seed class: %v", err)
+	}
+	err := svc.Update(contextWithTenant(1), &models.EduClass{BaseModel: models.BaseModel{ID: 1}, Name: "班级", Code: "CL001", ClassType: "group", CourseID: 1, TeacherID: 1, Capacity: 1, TenantID: 1})
+	if err == nil {
+		t.Fatalf("expected cross tenant update to be rejected")
+	}
+}
+
+func TestEduClassServiceRejectsUnconfiguredTeacherRole(t *testing.T) {
+	setupEduTestDB(t)
+	svc := NewEduClassService()
+	ctx := contextWithTenant(1)
+	seedEduTenantData(t, 1)
+
+	err := svc.Create(ctx, &models.EduClass{Name: "班级", Code: "CL001", ClassType: "group", CourseID: 1, TeacherID: 1, Capacity: 1, TenantID: 1})
+	if err == nil {
+		t.Fatalf("expected unconfigured teacher role to be rejected")
+	}
+}
+
+func TestEduClassServiceAllowsConfiguredTeacherRole(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduClassService()
+	ctx := contextWithTenant(1)
+	seedEduTenantData(t, 1)
+	var role models.SysRole
+	if err := db.Where("name = ? AND tenant_id = ?", "教师", 1).First(&role).Error; err != nil {
+		t.Fatalf("load role: %v", err)
+	}
+	if err := db.Create(&models.EduTeacherRoleConfig{RoleID: role.ID, TenantID: 1}).Error; err != nil {
+		t.Fatalf("seed teacher role config: %v", err)
+	}
+
+	err := svc.Create(ctx, &models.EduClass{Name: "班级", Code: "CL001", ClassType: "group", CourseID: 1, TeacherID: 1, Capacity: 1, TenantID: 1})
+	if err != nil {
+		t.Fatalf("expected configured teacher role to pass, got %v", err)
+	}
+}
+
+func TestEduClassServiceRejectsCrossTenantTeacherRoleConfig(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduClassService()
+	ctx := contextWithTenant(1)
+	seedEduTenantData(t, 1)
+	seedEduTenantData(t, 2)
+	var role models.SysRole
+	if err := db.Where("name = ? AND tenant_id = ?", "教师", 2).First(&role).Error; err != nil {
+		t.Fatalf("load tenant 2 role: %v", err)
+	}
+	if err := db.Create(&models.EduTeacherRoleConfig{RoleID: role.ID, TenantID: 1}).Error; err != nil {
+		t.Fatalf("seed cross tenant teacher role config: %v", err)
+	}
+
+	err := svc.Create(ctx, &models.EduClass{Name: "班级", Code: "CL001", ClassType: "group", CourseID: 1, TeacherID: 1, Capacity: 1, TenantID: 1})
+	if err == nil {
+		t.Fatalf("expected cross tenant teacher role config to be rejected")
+	}
+}
+
+func TestEduClassServiceRejectsDisabledConfiguredTeacherRole(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduClassService()
+	ctx := contextWithTenant(1)
+	seedEduTenantData(t, 1)
+	var role models.SysRole
+	if err := db.Where("name = ? AND tenant_id = ?", "教师", 1).First(&role).Error; err != nil {
+		t.Fatalf("load role: %v", err)
+	}
+	if err := db.Model(&models.SysRole{}).Where("id = ?", role.ID).Update("status", 0).Error; err != nil {
+		t.Fatalf("disable role: %v", err)
+	}
+	if err := db.Create(&models.EduTeacherRoleConfig{RoleID: role.ID, TenantID: 1}).Error; err != nil {
+		t.Fatalf("seed teacher role config: %v", err)
+	}
+
+	err := svc.Create(ctx, &models.EduClass{Name: "班级", Code: "CL001", ClassType: "group", CourseID: 1, TeacherID: 1, Capacity: 1, TenantID: 1})
+	if err == nil {
+		t.Fatalf("expected disabled configured teacher role to be rejected")
+	}
+}
+
 func TestEduClassServiceUpdateMemberAllowsSameRecordWithoutCapacityDrop(t *testing.T) {
 	db := setupEduTestDB(t)
 	svc := NewEduClassService()
@@ -152,6 +246,11 @@ func TestEduClassServiceTeacherOptionsDeduplicatesUsers(t *testing.T) {
 	if len(roles) != 2 {
 		t.Fatalf("expected 2 teacher roles, got %d", len(roles))
 	}
+	for _, role := range roles {
+		if err := db.Create(&models.EduTeacherRoleConfig{RoleID: role.ID, TenantID: 1}).Error; err != nil {
+			t.Fatalf("seed teacher role config: %v", err)
+		}
+	}
 	if err := db.Create(&models.SysUserRole{UserID: user.ID, RoleID: roles[1].ID}).Error; err != nil {
 		t.Fatalf("seed user-role: %v", err)
 	}
@@ -162,5 +261,72 @@ func TestEduClassServiceTeacherOptionsDeduplicatesUsers(t *testing.T) {
 	}
 	if len(opts) != 1 {
 		t.Fatalf("expected distinct teacher options, got %d", len(opts))
+	}
+}
+
+func TestEduClassServiceSaveTeacherRoleConfigRejectsCrossTenantRole(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduClassService()
+	seedEduTenantData(t, 1)
+	seedEduTenantData(t, 2)
+	var role models.SysRole
+	if err := db.Where("name = ? AND tenant_id = ?", "教师", 2).First(&role).Error; err != nil {
+		t.Fatalf("load tenant 2 role: %v", err)
+	}
+
+	err := svc.SaveTeacherRoleConfig(contextWithTenant(1), 1, []uint{role.ID}, 99)
+	if err == nil {
+		t.Fatalf("expected cross tenant role config to be rejected")
+	}
+}
+
+func TestEduClassServiceSaveTeacherRoleConfigRejectsDisabledRole(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduClassService()
+	seedEduTenantData(t, 1)
+	var role models.SysRole
+	if err := db.Where("name = ? AND tenant_id = ?", "教师", 1).First(&role).Error; err != nil {
+		t.Fatalf("load role: %v", err)
+	}
+	if err := db.Model(&models.SysRole{}).Where("id = ?", role.ID).Update("status", 0).Error; err != nil {
+		t.Fatalf("disable role: %v", err)
+	}
+
+	err := svc.SaveTeacherRoleConfig(contextWithTenant(1), 1, []uint{role.ID}, 99)
+	if err == nil {
+		t.Fatalf("expected disabled role config to be rejected")
+	}
+}
+
+func TestEduClassServiceTeacherRoleConfigReturnsTenantRolesAndSelectedIDs(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduClassService()
+	seedEduTenantData(t, 1)
+	seedEduTenantData(t, 2)
+	if err := db.Create(&models.SysRole{Name: "助教", Status: 1, TenantID: 1}).Error; err != nil {
+		t.Fatalf("seed assistant role: %v", err)
+	}
+	var role models.SysRole
+	if err := db.Where("name = ? AND tenant_id = ?", "教师", 1).First(&role).Error; err != nil {
+		t.Fatalf("load tenant 1 role: %v", err)
+	}
+	if err := svc.SaveTeacherRoleConfig(contextWithTenant(1), 1, []uint{role.ID}, 99); err != nil {
+		t.Fatalf("save teacher role config: %v", err)
+	}
+
+	config, err := svc.TeacherRoleConfig(contextWithTenant(1), 1)
+	if err != nil {
+		t.Fatalf("teacher role config: %v", err)
+	}
+	if len(config.SelectedRoleIDs) != 1 || config.SelectedRoleIDs[0] != role.ID {
+		t.Fatalf("unexpected selected role ids: %#v", config.SelectedRoleIDs)
+	}
+	for _, item := range config.Roles {
+		if item.TenantID != 1 {
+			t.Fatalf("expected only tenant 1 roles, got role %#v", item)
+		}
+	}
+	if len(config.Roles) != 2 {
+		t.Fatalf("expected 2 tenant roles, got %d", len(config.Roles))
 	}
 }

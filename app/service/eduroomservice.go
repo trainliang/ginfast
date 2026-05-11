@@ -57,6 +57,9 @@ func (s *EduRoomService) Create(ctx context.Context, room *models.EduRoom) error
 	if room == nil {
 		return errors.New("场地不能为空")
 	}
+	if err := ensureTenantID(room.TenantID); err != nil {
+		return err
+	}
 	if room.Capacity <= 0 {
 		return errors.New("capacity 必须大于 0")
 	}
@@ -76,11 +79,20 @@ func (s *EduRoomService) Update(ctx context.Context, room *models.EduRoom) error
 	if room == nil {
 		return errors.New("场地不能为空")
 	}
+	if err := ensureTenantID(room.TenantID); err != nil {
+		return err
+	}
 	if room.Capacity <= 0 {
 		return errors.New("capacity 必须大于 0")
 	}
 	return app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var count int64
+		if err := requireTenant(tx.Model(&models.EduRoom{}), room.TenantID).Where("id = ?", room.ID).Count(&count).Error; err != nil {
+			return err
+		}
+		if count == 0 {
+			return errors.New("场地不存在或不属于当前租户")
+		}
 		if err := requireTenant(tx.Model(&models.EduRoom{}), room.TenantID).Where("code = ? AND id <> ?", room.Code, room.ID).Count(&count).Error; err != nil {
 			return err
 		}
@@ -92,6 +104,9 @@ func (s *EduRoomService) Update(ctx context.Context, room *models.EduRoom) error
 }
 
 func (s *EduRoomService) Delete(ctx context.Context, tenantID, id uint) error {
+	if err := ensureTenantID(tenantID); err != nil {
+		return err
+	}
 	return app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var count int64
 		if err := requireTenant(tx.Model(&models.EduClass{}), tenantID).Where("room_id = ?", id).Count(&count).Error; err != nil {
@@ -117,16 +132,29 @@ func (s *EduRoomService) Delete(ctx context.Context, tenantID, id uint) error {
 }
 
 func (s *EduRoomService) SaveWeeklyRules(ctx context.Context, tenantID uint, rows []models.EduRoomWeeklyRuleImportRow) (*EduImportResult, error) {
+	if err := ensureTenantID(tenantID); err != nil {
+		return &EduImportResult{Success: false}, err
+	}
 	if err := s.ValidateEduRoomWeeklyRules(rows); err != nil {
 		return &EduImportResult{Success: false}, err
 	}
 	result := &EduImportResult{}
 	err := app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		for i, row := range rows {
-			if err := ensureRoomBelongsToTenant(tx, tenantID, row.RoomID); err != nil {
-				result.Errors = append(result.Errors, EduImportRowError{Row: i + 1, Field: "roomId", Reason: err.Error()})
-				continue
+		roomIDs := make(map[uint]bool)
+		for _, row := range rows {
+			if row.RoomID > 0 {
+				roomIDs[row.RoomID] = true
 			}
+		}
+		for roomID := range roomIDs {
+			if err := ensureRoomBelongsToTenant(tx, tenantID, roomID); err != nil {
+				return err
+			}
+			if err := requireTenant(tx.Where("room_id = ?", roomID), tenantID).Delete(&models.EduRoomWeeklyRule{}).Error; err != nil {
+				return err
+			}
+		}
+		for _, row := range rows {
 			rule := models.EduRoomWeeklyRule{RoomID: row.RoomID, Weekday: row.Weekday, StartTime: row.StartTime, EndTime: row.EndTime, Available: row.Available, Remark: row.Remark, TenantID: tenantID}
 			if row.Available == 0 {
 				rule.Available = 0
@@ -135,9 +163,6 @@ func (s *EduRoomService) SaveWeeklyRules(ctx context.Context, tenantID uint, row
 				return err
 			}
 			result.Created++
-		}
-		if len(result.Errors) > 0 {
-			return errors.New("导入数据存在错误")
 		}
 		return nil
 	})
@@ -157,6 +182,9 @@ func (s *EduRoomService) AddException(ctx context.Context, exception *models.Edu
 		tenantID = tenantIDFromContext(ctx)
 		exception.TenantID = tenantID
 	}
+	if err := ensureTenantID(tenantID); err != nil {
+		return err
+	}
 	return app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := ensureRoomBelongsToTenant(tx, tenantID, exception.RoomID); err != nil {
 			return err
@@ -174,6 +202,9 @@ func (s *EduRoomService) UpdateException(ctx context.Context, exception *models.
 		tenantID = tenantIDFromContext(ctx)
 		exception.TenantID = tenantID
 	}
+	if err := ensureTenantID(tenantID); err != nil {
+		return err
+	}
 	return app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := ensureRoomBelongsToTenant(tx, tenantID, exception.RoomID); err != nil {
 			return err
@@ -183,11 +214,17 @@ func (s *EduRoomService) UpdateException(ctx context.Context, exception *models.
 }
 
 func (s *EduRoomService) DeleteException(ctx context.Context, tenantID, id uint) error {
+	if err := ensureTenantID(tenantID); err != nil {
+		return err
+	}
 	return requireTenant(app.DB().WithContext(ctx).Where("id = ?", id), tenantID).Delete(&models.EduRoomException{}).Error
 }
 
 func (s *EduRoomService) ImportRows(ctx context.Context, tenantID uint, rows []models.EduRoomImportRow) (*EduImportResult, error) {
 	result := &EduImportResult{}
+	if err := ensureTenantID(tenantID); err != nil {
+		return result, err
+	}
 	err := app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for i, row := range rows {
 			rowNum := i + 1
@@ -251,6 +288,9 @@ func (s *EduRoomService) ImportRows(ctx context.Context, tenantID uint, rows []m
 
 func (s *EduRoomService) ImportWeeklyRows(ctx context.Context, tenantID uint, rows []models.EduRoomWeeklyRuleImportRow) (*EduImportResult, error) {
 	result := &EduImportResult{}
+	if err := ensureTenantID(tenantID); err != nil {
+		return result, err
+	}
 	err := app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := s.ValidateEduRoomWeeklyRules(rows); err != nil {
 			return err
@@ -281,6 +321,9 @@ func (s *EduRoomService) ImportWeeklyRows(ctx context.Context, tenantID uint, ro
 
 func (s *EduRoomService) ImportExceptionRows(ctx context.Context, tenantID uint, rows []models.EduRoomExceptionImportRow) (*EduImportResult, error) {
 	result := &EduImportResult{}
+	if err := ensureTenantID(tenantID); err != nil {
+		return result, err
+	}
 	err := app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for i, row := range rows {
 			rowNum := i + 1
@@ -315,6 +358,9 @@ func (s *EduRoomService) ImportExceptionRows(ctx context.Context, tenantID uint,
 }
 
 func (s *EduRoomService) ExportRows(ctx context.Context, tenantID uint, ids []uint) ([]models.EduRoomExportRow, error) {
+	if err := ensureTenantID(tenantID); err != nil {
+		return nil, err
+	}
 	var list []models.EduRoom
 	db := requireTenant(app.DB().WithContext(ctx).Model(&models.EduRoom{}), tenantID)
 	if len(ids) > 0 {

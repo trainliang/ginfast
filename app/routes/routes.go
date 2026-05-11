@@ -250,6 +250,8 @@ func InitRoutes(engine *gin.Engine) {
 				{
 					classes.GET("/list", eduClassControllers.List)
 					classes.GET("/teacher-options", eduClassControllers.TeacherOptions)
+					classes.GET("/teacher-role-config", eduClassControllers.TeacherRoleConfig)
+					classes.PUT("/teacher-role-config", eduClassControllers.SaveTeacherRoleConfig)
 					classes.GET("/export", eduClassControllers.Export)
 					classes.GET("/:id", eduClassControllers.GetByID)
 					classes.POST("/add", eduClassControllers.Add)

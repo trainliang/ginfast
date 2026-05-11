@@ -79,3 +79,13 @@ func (c Common) GetCurrentUserID(ctx *gin.Context) uint {
 func (c Common) GetCurrentTenantID(ctx *gin.Context) uint {
 	return common.GetCurrentTenantID(ctx)
 }
+
+// RequireTenant enforces that the current request is operating under a concrete tenant.
+// For business data modules, tenant_id=0 ("global tenant") is not allowed to create/update tenant-scoped records.
+func (c Common) RequireTenant(ctx *gin.Context) uint {
+	tenantID := common.GetCurrentTenantID(ctx)
+	if tenantID == 0 {
+		c.FailAndAbort(ctx, "当前处于全局租户，禁止维护租户业务数据，请先切换到具体租户", nil)
+	}
+	return tenantID
+}

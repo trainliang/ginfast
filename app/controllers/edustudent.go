@@ -60,7 +60,7 @@ func (ctl *EduStudentController) Add(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	student := buildStudentFromAddRequest(&req, ctl.GetCurrentTenantID(c), ctl.GetCurrentUserID(c))
+	student := buildStudentFromAddRequest(&req, ctl.RequireTenant(c), ctl.GetCurrentUserID(c))
 	if err := ctl.EduStudentService.Create(c, student); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
@@ -72,7 +72,7 @@ func (ctl *EduStudentController) Update(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	student := buildStudentFromUpdateRequest(&req, ctl.GetCurrentTenantID(c), ctl.GetCurrentUserID(c))
+	student := buildStudentFromUpdateRequest(&req, ctl.RequireTenant(c), ctl.GetCurrentUserID(c))
 	if err := ctl.EduStudentService.Update(c, student); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
@@ -84,7 +84,7 @@ func (ctl *EduStudentController) Delete(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	if err := ctl.EduStudentService.Delete(c, ctl.GetCurrentTenantID(c), req.ID); err != nil {
+	if err := ctl.EduStudentService.Delete(c, ctl.RequireTenant(c), req.ID); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
 	ctl.SuccessWithMessage(c, "学生删除成功", nil)
@@ -95,7 +95,7 @@ func (ctl *EduStudentController) Import(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	result, err := ctl.EduStudentService.ImportRows(c, ctl.GetCurrentTenantID(c), req.Rows)
+	result, err := ctl.EduStudentService.ImportRows(c, ctl.RequireTenant(c), req.Rows)
 	if err != nil && len(result.Errors) == 0 {
 		ctl.FailAndAbort(c, "导入学生失败", err)
 	}
@@ -107,7 +107,7 @@ func (ctl *EduStudentController) Export(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	rows, err := ctl.EduStudentService.ExportRows(c, ctl.GetCurrentTenantID(c), req.IDs)
+	rows, err := ctl.EduStudentService.ExportRows(c, ctl.RequireTenant(c), req.IDs)
 	if err != nil {
 		ctl.FailAndAbort(c, "导出学生失败", err)
 	}

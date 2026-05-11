@@ -20,6 +20,9 @@ func (s *EduStudentService) Create(ctx context.Context, student *models.EduStude
 	if student == nil {
 		return errors.New("学生不能为空")
 	}
+	if err := ensureTenantID(student.TenantID); err != nil {
+		return err
+	}
 	return app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Omit("Contacts").Create(student).Error; err != nil {
 			return err
@@ -32,7 +35,17 @@ func (s *EduStudentService) Update(ctx context.Context, student *models.EduStude
 	if student == nil {
 		return errors.New("学生不能为空")
 	}
+	if err := ensureTenantID(student.TenantID); err != nil {
+		return err
+	}
 	return app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var count int64
+		if err := requireTenant(tx.Model(&models.EduStudent{}), student.TenantID).Where("id = ?", student.ID).Count(&count).Error; err != nil {
+			return err
+		}
+		if count == 0 {
+			return errors.New("学生不存在或不属于当前租户")
+		}
 		if err := tx.Omit("Contacts").Save(student).Error; err != nil {
 			return err
 		}
@@ -41,6 +54,9 @@ func (s *EduStudentService) Update(ctx context.Context, student *models.EduStude
 }
 
 func (s *EduStudentService) Delete(ctx context.Context, tenantID, id uint) error {
+	if err := ensureTenantID(tenantID); err != nil {
+		return err
+	}
 	return app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var count int64
 		if err := requireTenant(tx.Model(&models.EduClassMember{}), tenantID).Where("student_id = ? AND status IN ?", id, []string{"studying", "paused"}).Count(&count).Error; err != nil {
@@ -82,6 +98,9 @@ func replaceStudentContacts(tx *gorm.DB, student *models.EduStudent) error {
 
 func (s *EduStudentService) ImportRows(ctx context.Context, tenantID uint, rows []models.EduStudentImportRow) (*EduImportResult, error) {
 	result := &EduImportResult{}
+	if err := ensureTenantID(tenantID); err != nil {
+		return result, err
+	}
 	err := app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for i, row := range rows {
 			rowNum := i + 1
@@ -126,6 +145,9 @@ func (s *EduStudentService) ImportRows(ctx context.Context, tenantID uint, rows 
 }
 
 func (s *EduStudentService) ExportRows(ctx context.Context, tenantID uint, ids []uint) ([]models.EduStudentExportRow, error) {
+	if err := ensureTenantID(tenantID); err != nil {
+		return nil, err
+	}
 	var list []models.EduStudent
 	db := requireTenant(app.DB().WithContext(ctx).Model(&models.EduStudent{}), tenantID)
 	if len(ids) > 0 {

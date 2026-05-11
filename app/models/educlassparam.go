@@ -272,3 +272,27 @@ type EduClassExportRequest struct {
 func (r *EduClassExportRequest) Validate(c *gin.Context) error {
 	return r.Validator.Check(c, r)
 }
+
+// EduTeacherRoleConfigRequest 保存教师角色配置请求
+type EduTeacherRoleConfigRequest struct {
+	Validator
+	RoleIDs []uint `form:"roleIds" json:"roleIds"`
+}
+
+func (r *EduTeacherRoleConfigRequest) Validate(c *gin.Context) error {
+	return r.Validator.Check(c, r)
+}
+
+// EduTeacherRoleConfigRoleItem 教师角色配置中的角色选项
+type EduTeacherRoleConfigRoleItem struct {
+	ID       uint   `json:"id"`
+	Name     string `json:"name"`
+	Status   int8   `json:"status"`
+	TenantID uint   `json:"tenantID"`
+}
+
+// EduTeacherRoleConfigResponse 教师角色配置响应
+type EduTeacherRoleConfigResponse struct {
+	Roles           []EduTeacherRoleConfigRoleItem `json:"roles"`
+	SelectedRoleIDs []uint                         `json:"selectedRoleIds"`
+}

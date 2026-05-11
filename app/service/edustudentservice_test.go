@@ -44,6 +44,27 @@ func TestEduStudentServiceUpdateReplacesContacts(t *testing.T) {
 	}
 }
 
+func TestEduStudentServiceRejectsZeroTenantCreate(t *testing.T) {
+	setupEduTestDB(t)
+	svc := NewEduStudentService()
+	err := svc.Create(contextWithTenant(0), &models.EduStudent{Name: "学生A", Phone: "13800000000", TenantID: 0})
+	if err == nil {
+		t.Fatalf("expected zero tenant create to be rejected")
+	}
+}
+
+func TestEduStudentServiceRejectsCrossTenantUpdate(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduStudentService()
+	if err := db.Create(&models.EduStudent{Name: "学生A", Phone: "13800000000", TenantID: 0}).Error; err != nil {
+		t.Fatalf("seed student: %v", err)
+	}
+	err := svc.Update(contextWithTenant(1), &models.EduStudent{BaseModel: models.BaseModel{ID: 1}, Name: "学生A", Phone: "13800000000", TenantID: 1})
+	if err == nil {
+		t.Fatalf("expected cross tenant update to be rejected")
+	}
+}
+
 func TestEduStudentServiceDeleteRejectsActiveClassMember(t *testing.T) {
 	db := setupEduTestDB(t)
 	svc := NewEduStudentService()

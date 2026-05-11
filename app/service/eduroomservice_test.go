@@ -71,6 +71,38 @@ func TestEduRoomServiceImportRowsPersistsData(t *testing.T) {
 	}
 }
 
+func TestEduRoomServiceRejectsZeroTenantCreate(t *testing.T) {
+	setupEduTestDB(t)
+	svc := NewEduRoomService()
+	err := svc.Create(contextWithTenant(0), &models.EduRoom{Name: "场地", Code: "R001", Capacity: 10, TenantID: 0})
+	if err == nil {
+		t.Fatalf("expected zero tenant create to be rejected")
+	}
+}
+
+func TestEduRoomServiceRejectsCrossTenantUpdate(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduRoomService()
+	if err := db.Create(&models.EduRoom{Name: "场地", Code: "R001", Capacity: 10, TenantID: 0}).Error; err != nil {
+		t.Fatalf("seed room: %v", err)
+	}
+	err := svc.Update(contextWithTenant(1), &models.EduRoom{BaseModel: models.BaseModel{ID: 1}, Name: "场地", Code: "R001", Capacity: 10, TenantID: 1})
+	if err == nil {
+		t.Fatalf("expected cross tenant update to be rejected")
+	}
+}
+
+func TestEduRoomServiceRejectsZeroTenantWeeklyRules(t *testing.T) {
+	setupEduTestDB(t)
+	svc := NewEduRoomService()
+	_, err := svc.SaveWeeklyRules(contextWithTenant(0), 0, []models.EduRoomWeeklyRuleImportRow{
+		{RoomID: 1, Weekday: 1, StartTime: "09:00", EndTime: "10:00", Available: 1},
+	})
+	if err == nil {
+		t.Fatalf("expected zero tenant weekly rules to be rejected")
+	}
+}
+
 func TestEduRoomServiceImportWeeklyRowsPersistsDataAndRejectsInvalidTenantRoom(t *testing.T) {
 	db := setupEduTestDB(t)
 	svc := NewEduRoomService()
