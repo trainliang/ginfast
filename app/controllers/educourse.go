@@ -81,14 +81,21 @@ func (ctl *EduCourseController) Add(c *gin.Context) {
 	}
 	tenantID := ctl.RequireTenant(c)
 	course := &models.EduCourse{
-		Name:        req.Name,
-		Code:        req.Code,
-		Type:        req.Type,
-		GradeRange:  req.GradeRange,
-		Status:      1,
-		Description: req.Description,
-		CreatedBy:   ctl.GetCurrentUserID(c),
-		TenantID:    tenantID,
+		Name:         req.Name,
+		Code:         req.Code,
+		Type:         req.Type,
+		GradeRange:   req.GradeRange,
+		RequiresRoom: -1,
+		Status:       1,
+		Description:  req.Description,
+		CreatedBy:    ctl.GetCurrentUserID(c),
+		TenantID:     tenantID,
+	}
+	if req.DefaultTeachingMode != "" {
+		course.DefaultTeachingMode = req.DefaultTeachingMode
+	}
+	if req.RequiresRoom != nil {
+		course.RequiresRoom = *req.RequiresRoom
 	}
 	if req.Status != nil {
 		course.Status = *req.Status
@@ -110,15 +117,22 @@ func (ctl *EduCourseController) Update(c *gin.Context) {
 	}
 	tenantID := ctl.RequireTenant(c)
 	course := &models.EduCourse{
-		BaseModel:   models.BaseModel{ID: req.ID},
-		Name:        req.Name,
-		Code:        req.Code,
-		Type:        req.Type,
-		GradeRange:  req.GradeRange,
-		Status:      1,
-		Description: req.Description,
-		CreatedBy:   ctl.GetCurrentUserID(c),
-		TenantID:    tenantID,
+		BaseModel:    models.BaseModel{ID: req.ID},
+		Name:         req.Name,
+		Code:         req.Code,
+		Type:         req.Type,
+		GradeRange:   req.GradeRange,
+		RequiresRoom: -1,
+		Status:       1,
+		Description:  req.Description,
+		CreatedBy:    ctl.GetCurrentUserID(c),
+		TenantID:     tenantID,
+	}
+	if req.DefaultTeachingMode != "" {
+		course.DefaultTeachingMode = req.DefaultTeachingMode
+	}
+	if req.RequiresRoom != nil {
+		course.RequiresRoom = *req.RequiresRoom
 	}
 	if req.Status != nil {
 		course.Status = *req.Status

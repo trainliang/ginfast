@@ -56,17 +56,18 @@ func (r *EduClassListRequest) Handler() func(db *gorm.DB) *gorm.DB {
 // EduClassAddRequest 新增班级请求
 type EduClassAddRequest struct {
 	Validator
-	Name      string    `form:"name" json:"name" validate:"required" message:"班级名称不能为空"`
-	Code      string    `form:"code" json:"code" validate:"required" message:"班级编码不能为空"`
-	ClassType string    `form:"classType" json:"classType" validate:"required" message:"班级类型不能为空"`
-	CourseID  uint      `form:"courseId" json:"courseId" validate:"required" message:"课程/项目ID不能为空"`
-	TeacherID uint      `form:"teacherId" json:"teacherId" validate:"required" message:"负责教师不能为空"`
-	RoomID    *uint     `form:"roomId" json:"roomId"`
-	Capacity  int       `form:"capacity" json:"capacity" validate:"required" message:"容量不能为空"`
-	Status    *int8     `form:"status" json:"status"`
-	StartDate *JSONTime `form:"startDate" json:"startDate"`
-	EndDate   *JSONTime `form:"endDate" json:"endDate"`
-	Remark    string    `form:"remark" json:"remark"`
+	Name               string    `form:"name" json:"name" validate:"required" message:"班级名称不能为空"`
+	Code               string    `form:"code" json:"code" validate:"required" message:"班级编码不能为空"`
+	ClassType          string    `form:"classType" json:"classType" validate:"required" message:"班级类型不能为空"`
+	CourseID           uint      `form:"courseId" json:"courseId" validate:"required" message:"课程/项目ID不能为空"`
+	TeacherID          uint      `form:"teacherId" json:"teacherId" validate:"required" message:"负责教师不能为空"`
+	RoomID             *uint     `form:"roomId" json:"roomId"`
+	Capacity           int       `form:"capacity" json:"capacity" validate:"required" message:"容量不能为空"`
+	BenefitCheckPolicy string    `form:"benefitCheckPolicy" json:"benefitCheckPolicy"`
+	Status             *int8     `form:"status" json:"status"`
+	StartDate          *JSONTime `form:"startDate" json:"startDate"`
+	EndDate            *JSONTime `form:"endDate" json:"endDate"`
+	Remark             string    `form:"remark" json:"remark"`
 }
 
 func (r *EduClassAddRequest) Validate(c *gin.Context) error {
@@ -76,18 +77,19 @@ func (r *EduClassAddRequest) Validate(c *gin.Context) error {
 // EduClassUpdateRequest 更新班级请求
 type EduClassUpdateRequest struct {
 	Validator
-	ID        uint      `form:"id" json:"id" validate:"required" message:"班级ID不能为空"`
-	Name      string    `form:"name" json:"name" validate:"required" message:"班级名称不能为空"`
-	Code      string    `form:"code" json:"code" validate:"required" message:"班级编码不能为空"`
-	ClassType string    `form:"classType" json:"classType" validate:"required" message:"班级类型不能为空"`
-	CourseID  uint      `form:"courseId" json:"courseId" validate:"required" message:"课程/项目ID不能为空"`
-	TeacherID uint      `form:"teacherId" json:"teacherId" validate:"required" message:"负责教师不能为空"`
-	RoomID    *uint     `form:"roomId" json:"roomId"`
-	Capacity  int       `form:"capacity" json:"capacity" validate:"required" message:"容量不能为空"`
-	Status    *int8     `form:"status" json:"status"`
-	StartDate *JSONTime `form:"startDate" json:"startDate"`
-	EndDate   *JSONTime `form:"endDate" json:"endDate"`
-	Remark    string    `form:"remark" json:"remark"`
+	ID                 uint      `form:"id" json:"id" validate:"required" message:"班级ID不能为空"`
+	Name               string    `form:"name" json:"name" validate:"required" message:"班级名称不能为空"`
+	Code               string    `form:"code" json:"code" validate:"required" message:"班级编码不能为空"`
+	ClassType          string    `form:"classType" json:"classType" validate:"required" message:"班级类型不能为空"`
+	CourseID           uint      `form:"courseId" json:"courseId" validate:"required" message:"课程/项目ID不能为空"`
+	TeacherID          uint      `form:"teacherId" json:"teacherId" validate:"required" message:"负责教师不能为空"`
+	RoomID             *uint     `form:"roomId" json:"roomId"`
+	Capacity           int       `form:"capacity" json:"capacity" validate:"required" message:"容量不能为空"`
+	BenefitCheckPolicy string    `form:"benefitCheckPolicy" json:"benefitCheckPolicy"`
+	Status             *int8     `form:"status" json:"status"`
+	StartDate          *JSONTime `form:"startDate" json:"startDate"`
+	EndDate            *JSONTime `form:"endDate" json:"endDate"`
+	Remark             string    `form:"remark" json:"remark"`
 }
 
 func (r *EduClassUpdateRequest) Validate(c *gin.Context) error {
@@ -189,17 +191,18 @@ func (r *EduClassMemberDeleteRequest) Validate(c *gin.Context) error {
 
 // EduClassImportRow 班级导入行
 type EduClassImportRow struct {
-	Name      string    `json:"name" form:"name"`
-	Code      string    `json:"code" form:"code"`
-	ClassType string    `json:"classType" form:"classType"`
-	CourseID  uint      `json:"courseId" form:"courseId"`
-	TeacherID uint      `json:"teacherId" form:"teacherId"`
-	RoomID    *uint     `json:"roomId" form:"roomId"`
-	Capacity  int       `json:"capacity" form:"capacity"`
-	Status    *int8     `json:"status" form:"status"`
-	StartDate *JSONTime `json:"startDate" form:"startDate"`
-	EndDate   *JSONTime `json:"endDate" form:"endDate"`
-	Remark    string    `json:"remark" form:"remark"`
+	Name               string    `json:"name" form:"name"`
+	Code               string    `json:"code" form:"code"`
+	ClassType          string    `json:"classType" form:"classType"`
+	CourseID           uint      `json:"courseId" form:"courseId"`
+	TeacherID          uint      `json:"teacherId" form:"teacherId"`
+	RoomID             *uint     `json:"roomId" form:"roomId"`
+	Capacity           int       `json:"capacity" form:"capacity"`
+	BenefitCheckPolicy string    `json:"benefitCheckPolicy" form:"benefitCheckPolicy"`
+	Status             *int8     `json:"status" form:"status"`
+	StartDate          *JSONTime `json:"startDate" form:"startDate"`
+	EndDate            *JSONTime `json:"endDate" form:"endDate"`
+	Remark             string    `json:"remark" form:"remark"`
 }
 
 // EduClassMemberImportRow 班级成员导入行
@@ -214,20 +217,21 @@ type EduClassMemberImportRow struct {
 
 // EduClassExportRow 班级导出行
 type EduClassExportRow struct {
-	ID        uint      `json:"id"`
-	Name      string    `json:"name"`
-	Code      string    `json:"code"`
-	ClassType string    `json:"classType"`
-	CourseID  uint      `json:"courseId"`
-	TeacherID uint      `json:"teacherId"`
-	RoomID    uint      `json:"roomId"`
-	Capacity  int       `json:"capacity"`
-	Status    int8      `json:"status"`
-	StartDate *JSONTime `json:"startDate"`
-	EndDate   *JSONTime `json:"endDate"`
-	Remark    string    `json:"remark"`
-	CreatedAt string    `json:"createdAt"`
-	UpdatedAt string    `json:"updatedAt"`
+	ID                 uint      `json:"id"`
+	Name               string    `json:"name"`
+	Code               string    `json:"code"`
+	ClassType          string    `json:"classType"`
+	CourseID           uint      `json:"courseId"`
+	TeacherID          uint      `json:"teacherId"`
+	RoomID             uint      `json:"roomId"`
+	Capacity           int       `json:"capacity"`
+	BenefitCheckPolicy string    `json:"benefitCheckPolicy"`
+	Status             int8      `json:"status"`
+	StartDate          *JSONTime `json:"startDate"`
+	EndDate            *JSONTime `json:"endDate"`
+	Remark             string    `json:"remark"`
+	CreatedAt          string    `json:"createdAt"`
+	UpdatedAt          string    `json:"updatedAt"`
 }
 
 // EduClassMemberExportRow 班级成员导出行

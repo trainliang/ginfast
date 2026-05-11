@@ -23,6 +23,9 @@ func (s *EduCourseService) Create(ctx context.Context, course *models.EduCourse)
 	if err := ensureTenantID(course.TenantID); err != nil {
 		return err
 	}
+	normalizeTeachingMode(course)
+	desiredMode := course.DefaultTeachingMode
+	desiredRequiresRoom := course.RequiresRoom
 	return app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var count int64
 		if err := requireTenant(tx.Model(&models.EduCourse{}), course.TenantID).Where("code = ?", course.Code).Count(&count).Error; err != nil {
@@ -31,7 +34,15 @@ func (s *EduCourseService) Create(ctx context.Context, course *models.EduCourse)
 		if count > 0 {
 			return fmt.Errorf("课程编码已存在")
 		}
-		return tx.Create(course).Error
+		if err := tx.Create(course).Error; err != nil {
+			return err
+		}
+		course.DefaultTeachingMode = desiredMode
+		course.RequiresRoom = desiredRequiresRoom
+		return tx.Model(course).UpdateColumns(map[string]interface{}{
+			"default_teaching_mode": desiredMode,
+			"requires_room":         desiredRequiresRoom,
+		}).Error
 	})
 }
 
@@ -56,6 +67,11 @@ func (s *EduCourseService) Update(ctx context.Context, course *models.EduCourse)
 		if count > 0 {
 			return fmt.Errorf("课程编码已存在")
 		}
+		var current models.EduCourse
+		if err := requireTenant(tx.Model(&models.EduCourse{}), course.TenantID).Where("id = ?", course.ID).First(&current).Error; err != nil {
+			return err
+		}
+		mergeTeachingModeForUpdate(course, &current)
 		return tx.Save(course).Error
 	})
 }
@@ -111,22 +127,38 @@ func (s *EduCourseService) ImportRows(ctx context.Context, tenantID uint, rows [
 			}
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				course = models.EduCourse{
-					Name:        row.Name,
-					Code:        strings.TrimSpace(row.Code),
-					Type:        row.Type,
-					GradeRange:  row.GradeRange,
-					Status:      1,
-					Sort:        0,
-					Description: row.Description,
-					TenantID:    tenantID,
+					Name:                row.Name,
+					Code:                strings.TrimSpace(row.Code),
+					Type:                row.Type,
+					GradeRange:          row.GradeRange,
+					DefaultTeachingMode: row.DefaultTeachingMode,
+					RequiresRoom:        sentinelInt8(),
+					Status:              1,
+					Sort:                0,
+					Description:         row.Description,
+					TenantID:            tenantID,
 				}
+				if row.RequiresRoom != nil {
+					course.RequiresRoom = *row.RequiresRoom
+				}
+				normalizeTeachingMode(&course)
 				if row.Status != nil {
 					course.Status = *row.Status
 				}
 				if row.Sort != nil {
 					course.Sort = *row.Sort
 				}
+				desiredMode := course.DefaultTeachingMode
+				desiredRequiresRoom := course.RequiresRoom
 				if err := tx.Create(&course).Error; err != nil {
+					return err
+				}
+				course.DefaultTeachingMode = desiredMode
+				course.RequiresRoom = desiredRequiresRoom
+				if err := tx.Model(&course).UpdateColumns(map[string]interface{}{
+					"default_teaching_mode": desiredMode,
+					"requires_room":         desiredRequiresRoom,
+				}).Error; err != nil {
 					return err
 				}
 				result.Created++
@@ -135,6 +167,7 @@ func (s *EduCourseService) ImportRows(ctx context.Context, tenantID uint, rows [
 			course.Name = row.Name
 			course.Type = row.Type
 			course.GradeRange = row.GradeRange
+			applyTeachingModeImportRow(&course, row)
 			course.Description = row.Description
 			if row.Status != nil {
 				course.Status = *row.Status
@@ -171,17 +204,66 @@ func (s *EduCourseService) ExportRows(ctx context.Context, tenantID uint, ids []
 	rows := make([]models.EduCourseExportRow, 0, len(courses))
 	for _, course := range courses {
 		rows = append(rows, models.EduCourseExportRow{
-			ID:          course.ID,
-			Name:        course.Name,
-			Code:        course.Code,
-			Type:        course.Type,
-			GradeRange:  course.GradeRange,
-			Status:      course.Status,
-			Sort:        course.Sort,
-			Description: course.Description,
-			CreatedAt:   course.CreatedAt.Format("2006-01-02 15:04:05"),
-			UpdatedAt:   course.UpdatedAt.Format("2006-01-02 15:04:05"),
+			ID:                  course.ID,
+			Name:                course.Name,
+			Code:                course.Code,
+			Type:                course.Type,
+			GradeRange:          course.GradeRange,
+			DefaultTeachingMode: course.DefaultTeachingMode,
+			RequiresRoom:        course.RequiresRoom,
+			Status:              course.Status,
+			Sort:                course.Sort,
+			Description:         course.Description,
+			CreatedAt:           course.CreatedAt.Format("2006-01-02 15:04:05"),
+			UpdatedAt:           course.UpdatedAt.Format("2006-01-02 15:04:05"),
 		})
 	}
 	return rows, nil
+}
+
+func normalizeTeachingMode(course *models.EduCourse) {
+	if course == nil {
+		return
+	}
+	mode := strings.ToLower(strings.TrimSpace(course.DefaultTeachingMode))
+	if mode == "" {
+		mode = "offline"
+	}
+	if mode != "online" && mode != "home" && mode != "offline" {
+		mode = "offline"
+	}
+	course.DefaultTeachingMode = mode
+	if course.RequiresRoom < 0 || (course.RequiresRoom != 0 && course.RequiresRoom != 1) {
+		if mode == "online" || mode == "home" {
+			course.RequiresRoom = 0
+		} else {
+			course.RequiresRoom = 1
+		}
+	}
+}
+
+func sentinelInt8() int8 {
+	return -1
+}
+
+func mergeTeachingModeForUpdate(course *models.EduCourse, current *models.EduCourse) {
+	if strings.TrimSpace(course.DefaultTeachingMode) == "" {
+		course.DefaultTeachingMode = current.DefaultTeachingMode
+	}
+	if course.RequiresRoom < 0 {
+		course.RequiresRoom = current.RequiresRoom
+	}
+	normalizeTeachingMode(course)
+}
+
+func applyTeachingModeImportRow(course *models.EduCourse, row models.EduCourseImportRow) {
+	if strings.TrimSpace(row.DefaultTeachingMode) != "" {
+		course.DefaultTeachingMode = row.DefaultTeachingMode
+	}
+	if row.RequiresRoom != nil {
+		course.RequiresRoom = *row.RequiresRoom
+	}
+	if strings.TrimSpace(row.DefaultTeachingMode) != "" || row.RequiresRoom != nil {
+		normalizeTeachingMode(course)
+	}
 }

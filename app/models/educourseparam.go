@@ -52,13 +52,15 @@ func (r *EduCourseListRequest) Handler() func(db *gorm.DB) *gorm.DB {
 // EduCourseAddRequest 新增课程/项目请求
 type EduCourseAddRequest struct {
 	Validator
-	Name        string `form:"name" json:"name" validate:"required" message:"课程/项目名称不能为空"`
-	Code        string `form:"code" json:"code" validate:"required" message:"课程/项目编码不能为空"`
-	Type        string `form:"type" json:"type"`
-	GradeRange  string `form:"gradeRange" json:"gradeRange"`
-	Status      *int8  `form:"status" json:"status"`
-	Sort        *int   `form:"sort" json:"sort"`
-	Description string `form:"description" json:"description"`
+	Name                string `form:"name" json:"name" validate:"required" message:"课程/项目名称不能为空"`
+	Code                string `form:"code" json:"code" validate:"required" message:"课程/项目编码不能为空"`
+	Type                string `form:"type" json:"type"`
+	GradeRange          string `form:"gradeRange" json:"gradeRange"`
+	DefaultTeachingMode string `form:"defaultTeachingMode" json:"defaultTeachingMode"`
+	RequiresRoom        *int8  `form:"requiresRoom" json:"requiresRoom"`
+	Status              *int8  `form:"status" json:"status"`
+	Sort                *int   `form:"sort" json:"sort"`
+	Description         string `form:"description" json:"description"`
 }
 
 func (r *EduCourseAddRequest) Validate(c *gin.Context) error {
@@ -68,14 +70,16 @@ func (r *EduCourseAddRequest) Validate(c *gin.Context) error {
 // EduCourseUpdateRequest 更新课程/项目请求
 type EduCourseUpdateRequest struct {
 	Validator
-	ID          uint   `form:"id" json:"id" validate:"required" message:"课程/项目ID不能为空"`
-	Name        string `form:"name" json:"name" validate:"required" message:"课程/项目名称不能为空"`
-	Code        string `form:"code" json:"code" validate:"required" message:"课程/项目编码不能为空"`
-	Type        string `form:"type" json:"type"`
-	GradeRange  string `form:"gradeRange" json:"gradeRange"`
-	Status      *int8  `form:"status" json:"status"`
-	Sort        *int   `form:"sort" json:"sort"`
-	Description string `form:"description" json:"description"`
+	ID                  uint   `form:"id" json:"id" validate:"required" message:"课程/项目ID不能为空"`
+	Name                string `form:"name" json:"name" validate:"required" message:"课程/项目名称不能为空"`
+	Code                string `form:"code" json:"code" validate:"required" message:"课程/项目编码不能为空"`
+	Type                string `form:"type" json:"type"`
+	GradeRange          string `form:"gradeRange" json:"gradeRange"`
+	DefaultTeachingMode string `form:"defaultTeachingMode" json:"defaultTeachingMode"`
+	RequiresRoom        *int8  `form:"requiresRoom" json:"requiresRoom"`
+	Status              *int8  `form:"status" json:"status"`
+	Sort                *int   `form:"sort" json:"sort"`
+	Description         string `form:"description" json:"description"`
 }
 
 func (r *EduCourseUpdateRequest) Validate(c *gin.Context) error {
@@ -104,27 +108,31 @@ func (r *EduCourseGetRequest) Validate(c *gin.Context) error {
 
 // EduCourseImportRow 课程/项目导入行
 type EduCourseImportRow struct {
-	Name        string `json:"name" form:"name"`
-	Code        string `json:"code" form:"code"`
-	Type        string `json:"type" form:"type"`
-	GradeRange  string `json:"gradeRange" form:"gradeRange"`
-	Status      *int8  `json:"status" form:"status"`
-	Sort        *int   `json:"sort" form:"sort"`
-	Description string `json:"description" form:"description"`
+	Name                string `json:"name" form:"name"`
+	Code                string `json:"code" form:"code"`
+	Type                string `json:"type" form:"type"`
+	GradeRange          string `json:"gradeRange" form:"gradeRange"`
+	DefaultTeachingMode string `json:"defaultTeachingMode" form:"defaultTeachingMode"`
+	RequiresRoom        *int8  `json:"requiresRoom" form:"requiresRoom"`
+	Status              *int8  `json:"status" form:"status"`
+	Sort                *int   `json:"sort" form:"sort"`
+	Description         string `json:"description" form:"description"`
 }
 
 // EduCourseExportRow 课程/项目导出行
 type EduCourseExportRow struct {
-	ID          uint   `json:"id"`
-	Name        string `json:"name"`
-	Code        string `json:"code"`
-	Type        string `json:"type"`
-	GradeRange  string `json:"gradeRange"`
-	Status      int8   `json:"status"`
-	Sort        int    `json:"sort"`
-	Description string `json:"description"`
-	CreatedAt   string `json:"createdAt"`
-	UpdatedAt   string `json:"updatedAt"`
+	ID                  uint   `json:"id"`
+	Name                string `json:"name"`
+	Code                string `json:"code"`
+	Type                string `json:"type"`
+	GradeRange          string `json:"gradeRange"`
+	DefaultTeachingMode string `json:"defaultTeachingMode"`
+	RequiresRoom        int8   `json:"requiresRoom"`
+	Status              int8   `json:"status"`
+	Sort                int    `json:"sort"`
+	Description         string `json:"description"`
+	CreatedAt           string `json:"createdAt"`
+	UpdatedAt           string `json:"updatedAt"`
 }
 
 // EduCourseImportRequest 课程/项目导入请求

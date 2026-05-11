@@ -37,6 +37,7 @@ func (s *EduClassService) Create(ctx context.Context, class *models.EduClass) er
 	if err := ensureTenantID(tenantID); err != nil {
 		return err
 	}
+	normalizeBenefitCheckPolicy(class)
 	return app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var count int64
 		if err := requireTenant(tx.Model(&models.EduClass{}), tenantID).Where("code = ?", class.Code).Count(&count).Error; err != nil {
@@ -90,6 +91,11 @@ func (s *EduClassService) Update(ctx context.Context, class *models.EduClass) er
 		if err := validateClassReferences(tx, tenantID, class.CourseID, class.TeacherID, class.RoomID); err != nil {
 			return err
 		}
+		var current models.EduClass
+		if err := requireTenant(tx.Model(&models.EduClass{}), tenantID).Where("id = ?", class.ID).First(&current).Error; err != nil {
+			return err
+		}
+		mergeBenefitCheckPolicyForUpdate(class, &current)
 		return tx.Save(class).Error
 	})
 }
@@ -224,13 +230,14 @@ func (s *EduClassService) ImportRows(ctx context.Context, tenantID uint, rows []
 				return err
 			}
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				class = models.EduClass{Name: row.Name, Code: row.Code, ClassType: row.ClassType, CourseID: row.CourseID, TeacherID: row.TeacherID, Capacity: row.Capacity, TenantID: tenantID}
+				class = models.EduClass{Name: row.Name, Code: row.Code, ClassType: row.ClassType, CourseID: row.CourseID, TeacherID: row.TeacherID, Capacity: row.Capacity, BenefitCheckPolicy: row.BenefitCheckPolicy, TenantID: tenantID}
 				if row.RoomID != nil {
 					class.RoomID = *row.RoomID
 				}
 				if row.Status != nil {
 					class.Status = *row.Status
 				}
+				normalizeBenefitCheckPolicy(&class)
 				if err := tx.Create(&class).Error; err != nil {
 					return err
 				}
@@ -242,6 +249,10 @@ func (s *EduClassService) ImportRows(ctx context.Context, tenantID uint, rows []
 			class.CourseID = row.CourseID
 			class.TeacherID = row.TeacherID
 			class.Capacity = row.Capacity
+			if strings.TrimSpace(row.BenefitCheckPolicy) != "" {
+				class.BenefitCheckPolicy = row.BenefitCheckPolicy
+				normalizeBenefitCheckPolicy(&class)
+			}
 			if row.RoomID != nil {
 				class.RoomID = *row.RoomID
 			}
@@ -299,9 +310,30 @@ func (s *EduClassService) ExportRows(ctx context.Context, tenantID uint, ids []u
 	}
 	rows := make([]models.EduClassExportRow, 0, len(list))
 	for _, item := range list {
-		rows = append(rows, models.EduClassExportRow{ID: item.ID, Name: item.Name, Code: item.Code, ClassType: item.ClassType, CourseID: item.CourseID, TeacherID: item.TeacherID, RoomID: item.RoomID, Capacity: item.Capacity, Status: item.Status, StartDate: item.StartDate, EndDate: item.EndDate, Remark: item.Remark, CreatedAt: item.CreatedAt.Format("2006-01-02 15:04:05"), UpdatedAt: item.UpdatedAt.Format("2006-01-02 15:04:05")})
+		rows = append(rows, models.EduClassExportRow{ID: item.ID, Name: item.Name, Code: item.Code, ClassType: item.ClassType, CourseID: item.CourseID, TeacherID: item.TeacherID, RoomID: item.RoomID, Capacity: item.Capacity, BenefitCheckPolicy: item.BenefitCheckPolicy, Status: item.Status, StartDate: item.StartDate, EndDate: item.EndDate, Remark: item.Remark, CreatedAt: item.CreatedAt.Format("2006-01-02 15:04:05"), UpdatedAt: item.UpdatedAt.Format("2006-01-02 15:04:05")})
 	}
 	return rows, nil
+}
+
+func normalizeBenefitCheckPolicy(class *models.EduClass) {
+	if class == nil {
+		return
+	}
+	policy := strings.ToLower(strings.TrimSpace(class.BenefitCheckPolicy))
+	switch policy {
+	case "required", "warn", "none":
+		class.BenefitCheckPolicy = policy
+	default:
+		class.BenefitCheckPolicy = "required"
+	}
+}
+
+func mergeBenefitCheckPolicyForUpdate(class *models.EduClass, current *models.EduClass) {
+	if strings.TrimSpace(class.BenefitCheckPolicy) == "" {
+		class.BenefitCheckPolicy = current.BenefitCheckPolicy
+		return
+	}
+	normalizeBenefitCheckPolicy(class)
 }
 
 func (s *EduClassService) ExportMemberRows(ctx context.Context, tenantID uint, ids []uint) ([]models.EduClassMemberExportRow, error) {

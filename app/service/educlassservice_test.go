@@ -85,6 +85,119 @@ func TestEduClassServiceRejectsCrossTenantUpdate(t *testing.T) {
 	}
 }
 
+func TestEduClassServiceDefaultsBenefitCheckPolicy(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduClassService()
+	ctx := contextWithTenant(1)
+	seedEduTenantData(t, 1)
+	var role models.SysRole
+	if err := db.Where("name = ? AND tenant_id = ?", "教师", 1).First(&role).Error; err != nil {
+		t.Fatalf("load role: %v", err)
+	}
+	if err := db.Create(&models.EduTeacherRoleConfig{RoleID: role.ID, TenantID: 1}).Error; err != nil {
+		t.Fatalf("seed teacher role config: %v", err)
+	}
+
+	class := &models.EduClass{Name: "班级", Code: "CL002", ClassType: "group", CourseID: 1, TeacherID: 1, Capacity: 1, TenantID: 1}
+	if err := svc.Create(ctx, class); err != nil {
+		t.Fatalf("create class: %v", err)
+	}
+
+	var saved models.EduClass
+	if err := db.Where("code = ? AND tenant_id = ?", "CL002", 1).First(&saved).Error; err != nil {
+		t.Fatalf("load class: %v", err)
+	}
+	if saved.BenefitCheckPolicy != "required" {
+		t.Fatalf("expected benefitCheckPolicy required, got %q", saved.BenefitCheckPolicy)
+	}
+}
+
+func TestEduClassServiceNormalizesBenefitCheckPolicy(t *testing.T) {
+	setupEduTestDB(t)
+	class := &models.EduClass{BenefitCheckPolicy: " WARN "}
+	normalizeBenefitCheckPolicy(class)
+	if class.BenefitCheckPolicy != "warn" {
+		t.Fatalf("expected warn policy, got %q", class.BenefitCheckPolicy)
+	}
+
+	class.BenefitCheckPolicy = "invalid"
+	normalizeBenefitCheckPolicy(class)
+	if class.BenefitCheckPolicy != "required" {
+		t.Fatalf("expected invalid policy to default required, got %q", class.BenefitCheckPolicy)
+	}
+}
+
+func TestEduClassServiceUpdatePreservesOmittedBenefitCheckPolicy(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduClassService()
+	ctx := contextWithTenant(1)
+	seedEduTenantData(t, 1)
+	var role models.SysRole
+	if err := db.Where("name = ? AND tenant_id = ?", "教师", 1).First(&role).Error; err != nil {
+		t.Fatalf("load role: %v", err)
+	}
+	if err := db.Create(&models.EduTeacherRoleConfig{RoleID: role.ID, TenantID: 1}).Error; err != nil {
+		t.Fatalf("seed teacher role config: %v", err)
+	}
+	if err := db.Create(&models.EduClass{Name: "班级", Code: "CL002", ClassType: "group", CourseID: 1, TeacherID: 1, Capacity: 1, BenefitCheckPolicy: "warn", TenantID: 1}).Error; err != nil {
+		t.Fatalf("seed class: %v", err)
+	}
+
+	if err := svc.Update(ctx, &models.EduClass{
+		BaseModel: models.BaseModel{ID: 1},
+		Name:      "班级2",
+		Code:      "CL002",
+		ClassType: "group",
+		CourseID:  1,
+		TeacherID: 1,
+		Capacity:  1,
+		TenantID:  1,
+	}); err != nil {
+		t.Fatalf("update class: %v", err)
+	}
+
+	var saved models.EduClass
+	if err := db.Where("id = ?", 1).First(&saved).Error; err != nil {
+		t.Fatalf("load class: %v", err)
+	}
+	if saved.BenefitCheckPolicy != "warn" {
+		t.Fatalf("expected omitted benefitCheckPolicy to preserve warn, got %q", saved.BenefitCheckPolicy)
+	}
+}
+
+func TestEduClassServiceImportExistingPreservesOmittedBenefitCheckPolicy(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduClassService()
+	ctx := contextWithTenant(1)
+	seedEduTenantData(t, 1)
+	var role models.SysRole
+	if err := db.Where("name = ? AND tenant_id = ?", "教师", 1).First(&role).Error; err != nil {
+		t.Fatalf("load role: %v", err)
+	}
+	if err := db.Create(&models.EduTeacherRoleConfig{RoleID: role.ID, TenantID: 1}).Error; err != nil {
+		t.Fatalf("seed teacher role config: %v", err)
+	}
+	if err := db.Create(&models.EduClass{Name: "班级", Code: "CL002", ClassType: "group", CourseID: 1, TeacherID: 1, Capacity: 1, BenefitCheckPolicy: "none", TenantID: 1}).Error; err != nil {
+		t.Fatalf("seed class: %v", err)
+	}
+
+	result, err := svc.ImportRows(ctx, 1, []models.EduClassImportRow{{Name: "班级2", Code: "CL002", ClassType: "group", CourseID: 1, TeacherID: 1, Capacity: 1}})
+	if err != nil {
+		t.Fatalf("import class: %v", err)
+	}
+	if !result.Success || result.Updated != 1 {
+		t.Fatalf("expected one updated row, got %+v", result)
+	}
+
+	var saved models.EduClass
+	if err := db.Where("code = ? AND tenant_id = ?", "CL002", 1).First(&saved).Error; err != nil {
+		t.Fatalf("load class: %v", err)
+	}
+	if saved.BenefitCheckPolicy != "none" {
+		t.Fatalf("expected omitted import benefitCheckPolicy to preserve none, got %q", saved.BenefitCheckPolicy)
+	}
+}
+
 func TestEduClassServiceRejectsUnconfiguredTeacherRole(t *testing.T) {
 	setupEduTestDB(t)
 	svc := NewEduClassService()

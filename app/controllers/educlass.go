@@ -223,7 +223,7 @@ func (ctl *EduClassController) ExportMembers(c *gin.Context) {
 }
 
 func buildClassFromAddRequest(req *models.EduClassAddRequest, tenantID, userID uint) *models.EduClass {
-	class := &models.EduClass{Name: req.Name, Code: req.Code, ClassType: req.ClassType, CourseID: req.CourseID, TeacherID: req.TeacherID, Capacity: req.Capacity, Status: 1, StartDate: req.StartDate, EndDate: req.EndDate, Remark: req.Remark, CreatedBy: userID, TenantID: tenantID}
+	class := &models.EduClass{Name: req.Name, Code: req.Code, ClassType: req.ClassType, CourseID: req.CourseID, TeacherID: req.TeacherID, Capacity: req.Capacity, BenefitCheckPolicy: req.BenefitCheckPolicy, Status: 1, StartDate: req.StartDate, EndDate: req.EndDate, Remark: req.Remark, CreatedBy: userID, TenantID: tenantID}
 	if req.RoomID != nil {
 		class.RoomID = *req.RoomID
 	}
@@ -234,7 +234,7 @@ func buildClassFromAddRequest(req *models.EduClassAddRequest, tenantID, userID u
 }
 
 func buildClassFromUpdateRequest(req *models.EduClassUpdateRequest, tenantID, userID uint) *models.EduClass {
-	class := &models.EduClass{BaseModel: models.BaseModel{ID: req.ID}, Name: req.Name, Code: req.Code, ClassType: req.ClassType, CourseID: req.CourseID, TeacherID: req.TeacherID, Capacity: req.Capacity, Status: 1, StartDate: req.StartDate, EndDate: req.EndDate, Remark: req.Remark, CreatedBy: userID, TenantID: tenantID}
+	class := &models.EduClass{BaseModel: models.BaseModel{ID: req.ID}, Name: req.Name, Code: req.Code, ClassType: req.ClassType, CourseID: req.CourseID, TeacherID: req.TeacherID, Capacity: req.Capacity, BenefitCheckPolicy: req.BenefitCheckPolicy, Status: 1, StartDate: req.StartDate, EndDate: req.EndDate, Remark: req.Remark, CreatedBy: userID, TenantID: tenantID}
 	if req.RoomID != nil {
 		class.RoomID = *req.RoomID
 	}
