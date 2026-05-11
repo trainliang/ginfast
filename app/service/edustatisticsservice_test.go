@@ -238,6 +238,71 @@ func TestEduStatisticsServiceConflictOverridesGroupedByType(t *testing.T) {
 	}
 }
 
+func TestEduStatisticsServiceScheduleIncludesEligibilityWarningsAndIneligible(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduStatisticsService()
+	ctx := contextWithTenant(1)
+	seedEduTenantData(t, 1)
+	seedLessonEligibility(t, db, 1, 1, 1, 1, 1, "warn", "about_to_expire")
+	seedLessonEligibility(t, db, 1, 2, 2, 1, 1, "ineligible", "no_benefit")
+	seedLessonEligibility(t, db, 1, 3, 3, 1, 1, "eligible", "ok")
+
+	resp, err := svc.ScheduleStatistics(ctx, &models.EduStatisticsRangeRequest{})
+	if err != nil {
+		t.Fatalf("schedule statistics: %v", err)
+	}
+	if len(resp.EligibilityDetails) != 2 {
+		t.Fatalf("expected 2 eligibility anomalies, got %+v", resp.EligibilityDetails)
+	}
+}
+
+func TestEduStatisticsServiceBenefitAggregatesCourseCountsAndZeroRemaining(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduStatisticsService()
+	ctx := contextWithTenant(1)
+	now := time.Now().UTC()
+	seedBenefitProduct(t, db, 1, 1, 1, "course", "count_limited", 10, 30)
+	seedBenefitProduct(t, db, 1, 2, 2, "course", "period_unlimited", 0, 30)
+	seedStudentBenefit(t, db, 1, 1, 1, 1, 1, 0, 0, "course", "count_limited", 10, 10, 0, now.Add(-24*time.Hour), now.Add(10*24*time.Hour))
+	seedStudentBenefit(t, db, 1, 2, 2, 2, 2, 0, 0, "course", "period_unlimited", 0, 0, 0, now.Add(-24*time.Hour), now.Add(40*24*time.Hour))
+	seedStudentBenefit(t, db, 1, 3, 3, 1, 1, 0, 0, "course", "count_limited", 10, 1, 9, now.Add(-24*time.Hour), now.Add(5*24*time.Hour))
+
+	resp, err := svc.BenefitStatistics(ctx, &models.EduStatisticsRangeRequest{})
+	if err != nil {
+		t.Fatalf("benefit statistics: %v", err)
+	}
+	if resp.ZeroRemainingCount != 1 {
+		t.Fatalf("expected 1 zero remaining count benefit, got %+v", resp)
+	}
+	if len(resp.CourseBenefitCounts) != 2 {
+		t.Fatalf("expected 2 course aggregates, got %+v", resp.CourseBenefitCounts)
+	}
+}
+
+func TestEduStatisticsServiceExternalSyncIncludesDueRetryCount(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduStatisticsService()
+	ctx := contextWithTenant(1)
+	seedEduTenantData(t, 1)
+	seedExternalSyncWithRetry(t, db, 1, 1, 1, "retrying", time.Now().UTC().Add(-time.Hour))
+	seedExternalSyncWithRetry(t, db, 1, 2, 1, "retrying", time.Now().UTC().Add(time.Hour))
+	seedExternalSyncWithRetry(t, db, 1, 3, 1, "failed", time.Time{})
+
+	resp, err := svc.ExternalSyncStatistics(ctx, &models.EduStatisticsRangeRequest{})
+	if err != nil {
+		t.Fatalf("external sync statistics: %v", err)
+	}
+	if resp.RetryingCount != 2 {
+		t.Fatalf("expected retrying count 2, got %+v", resp)
+	}
+	if resp.FailedCount != 1 {
+		t.Fatalf("expected failed count 1, got %+v", resp)
+	}
+	if resp.DueRetryCount != 1 {
+		t.Fatalf("expected due retry count 1, got %+v", resp)
+	}
+}
+
 func TestEduStatisticsServiceScheduleIncludesEligibilityAndConflictDetails(t *testing.T) {
 	db := setupEduTestDB(t)
 	svc := NewEduStatisticsService()
@@ -342,5 +407,22 @@ func seedScheduleConflictOverride(t *testing.T, db *gorm.DB, tenantID, id uint, 
 	}
 	if err := db.Create(row).Error; err != nil {
 		t.Fatalf("seed conflict override: %v", err)
+	}
+}
+
+func seedLessonEligibility(t *testing.T, db *gorm.DB, tenantID, lessonID, studentID, courseID, benefitID uint, status, reasonCode string) {
+	t.Helper()
+	row := &models.EduLessonStudentEligibility{
+		LessonID:           lessonID,
+		StudentID:          studentID,
+		CourseID:           courseID,
+		StudentBenefitID:   benefitID,
+		EligibilityStatus:  status,
+		ReasonCode:         reasonCode,
+		CheckedAt:          datePtr(time.Now().UTC()),
+		TenantID:           tenantID,
+	}
+	if err := db.Create(row).Error; err != nil {
+		t.Fatalf("seed lesson eligibility: %v", err)
 	}
 }
