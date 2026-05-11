@@ -38,6 +38,7 @@ var eduRoomControllers = controllers.NewEduRoomController()                 // �
 var eduTermControllers = controllers.NewEduTermController()                 // 教培学期控制器
 var eduBenefitControllers = controllers.NewEduBenefitController()           // 教培权益中心控制器
 var eduScheduleControllers = controllers.NewEduScheduleController()         // 教培排课控制器
+var eduStatisticsControllers = controllers.NewEduStatisticsController()     // 教培统计控制器
 
 // InitRoutes 初始化路由
 func InitRoutes(engine *gin.Engine) {
@@ -325,6 +326,13 @@ func InitRoutes(engine *gin.Engine) {
 				{
 					benefitExternalSync.GET("/list", eduBenefitControllers.ExternalSyncList)
 					benefitExternalSync.POST("/retry", eduBenefitControllers.RetryExternalSync)
+				}
+
+				statistics := edu.Group("/statistics")
+				{
+					statistics.GET("/schedule", eduStatisticsControllers.Schedule)
+					statistics.GET("/benefits", eduStatisticsControllers.Benefits)
+					statistics.GET("/external-sync", eduStatisticsControllers.ExternalSync)
 				}
 
 				scheduleRules := edu.Group("/schedule-rules")
