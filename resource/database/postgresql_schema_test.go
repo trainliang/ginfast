@@ -115,6 +115,19 @@ func TestPostgreSQLSchemaIncludesEduScheduleRulesPatch(t *testing.T) {
 		"CREATE TABLE IF NOT EXISTS edu_lesson",
 		"CREATE TABLE IF NOT EXISTS edu_lesson_change_log",
 		"CREATE TABLE IF NOT EXISTS edu_schedule_conflict_override",
+		"repeat_type VARCHAR(32)",
+		"term_id INTEGER DEFAULT 0",
+		"course_id INTEGER NOT NULL",
+		"rule_id INTEGER DEFAULT 0",
+		"rule_version INTEGER DEFAULT 1",
+		"lesson_type VARCHAR(32) NOT NULL",
+		"status VARCHAR(32) DEFAULT 'scheduled'",
+		"is_manual_adjusted SMALLINT DEFAULT 0",
+		"source_lesson_id INTEGER DEFAULT 0",
+		"action_type VARCHAR(32) NOT NULL",
+		"operator_id INTEGER DEFAULT 0",
+		"occurred_at TIMESTAMP",
+		"conflict_key VARCHAR(128) NOT NULL",
 		"(tenant_id, rule_type)",
 		"(tenant_id, lesson_date)",
 		"(tenant_id, teacher_id, lesson_date)",
@@ -129,14 +142,20 @@ func TestPostgreSQLSchemaIncludesEduScheduleRulesPatch(t *testing.T) {
 		"'/api/edu/schedule-rules/delete', 'DELETE'",
 		"'/api/edu/lessons/calendar', 'GET'",
 		"'/api/edu/lessons/list', 'GET'",
+		"'/api/edu/lessons/reschedule', 'PUT'",
+		"'/api/edu/lessons/stop', 'PUT'",
+		"'/api/edu/lessons/cancel', 'PUT'",
+		"'/api/edu/lessons/restore', 'PUT'",
+		"'/api/edu/lessons/makeup', 'POST'",
+		"'/api/edu/lessons/:id/change-logs', 'GET'",
 		"'/api/edu/schedules/check-conflicts', 'POST'",
 		"INSERT INTO sys_menu (id, parent_id, path, name, redirect, component, title, is_full, hide, disable, keep_alive, affix, link, iframe, svg_icon, icon, sort, type, is_link, permission, created_at, updated_at, deleted_at, created_by) VALUES",
 		"'/edu/schedule', 'EduSchedule', '', 'edu/schedule/schedule', '排课管理'",
 		"INSERT INTO sys_menu_api (menu_id, api_id) VALUES",
 		"INSERT INTO sys_casbin_rule (ptype, v0, v1, v2, v3, v4, v5)",
 		"UPDATE sys_tenants",
-		"SELECT setval('sys_api_id_seq', GREATEST((SELECT last_value FROM sys_api_id_seq), 289), true)",
-		"SELECT setval('sys_menu_id_seq', GREATEST((SELECT last_value FROM sys_menu_id_seq), 140412), true)",
+		"SELECT setval('sys_api_id_seq', GREATEST((SELECT last_value FROM sys_api_id_seq), 295), true)",
+		"SELECT setval('sys_menu_id_seq', GREATEST((SELECT last_value FROM sys_menu_id_seq), 140418), true)",
 	}
 
 	for _, snippet := range requiredSnippets {
@@ -167,13 +186,53 @@ func TestPostgreSQLSchemaIncludesEduStatisticsPermissionsPatch(t *testing.T) {
 		"/api/edu/statistics/benefits",
 		"/api/edu/statistics/external-sync",
 		"UPDATE sys_tenants",
-		"SELECT setval('sys_api_id_seq', GREATEST((SELECT last_value FROM sys_api_id_seq), 292), true)",
-		"SELECT setval('sys_menu_id_seq', GREATEST((SELECT last_value FROM sys_menu_id_seq), 140413), true)",
+		"(296, '排课统计', '/api/edu/statistics/schedule', 'GET'",
+		"(297, '权益统计', '/api/edu/statistics/benefits', 'GET'",
+		"(298, '外部同步统计', '/api/edu/statistics/external-sync', 'GET'",
+		"(140419, 140350, '/edu/statistics'",
+		"SELECT setval('sys_api_id_seq', GREATEST((SELECT last_value FROM sys_api_id_seq), 298), true)",
+		"SELECT setval('sys_menu_id_seq', GREATEST((SELECT last_value FROM sys_menu_id_seq), 140419), true)",
 	}
 
 	for _, snippet := range requiredSnippets {
 		if !strings.Contains(sqlText, snippet) {
 			t.Fatalf("edu statistics permissions patch missing required snippet: %s", snippet)
+		}
+	}
+}
+
+func TestPostgreSQLSchemaIncludesEduScheduleCompletionPatch(t *testing.T) {
+	sqlBytes, err := os.ReadFile("patches/2026-05-12-edu-schedule-completion-postgresql.sql")
+	if err != nil {
+		t.Fatalf("read edu schedule completion patch: %v", err)
+	}
+	sqlText := string(sqlBytes)
+
+	requiredSnippets := []string{
+		"ALTER TABLE edu_schedule_rule ADD COLUMN IF NOT EXISTS repeat_type VARCHAR(32)",
+		"ALTER TABLE edu_lesson ADD COLUMN IF NOT EXISTS rule_id INTEGER DEFAULT 0",
+		"ALTER TABLE edu_lesson ADD COLUMN IF NOT EXISTS lesson_type VARCHAR(32)",
+		"ALTER TABLE edu_lesson ADD COLUMN IF NOT EXISTS status VARCHAR(32) DEFAULT 'scheduled'",
+		"ALTER TABLE edu_lesson ADD COLUMN IF NOT EXISTS is_manual_adjusted SMALLINT DEFAULT 0",
+		"ALTER TABLE edu_lesson_change_log ADD COLUMN IF NOT EXISTS action_type VARCHAR(32)",
+		"ALTER TABLE edu_schedule_conflict_override ADD COLUMN IF NOT EXISTS conflict_key VARCHAR(128)",
+		"ALTER TABLE edu_lesson ALTER COLUMN start_time TYPE VARCHAR(16) USING start_time::text",
+		"ALTER TABLE edu_lesson_change_log ALTER COLUMN before_data TYPE TEXT USING before_data::text",
+		"ALTER TABLE edu_lesson_change_log ALTER COLUMN change_type DROP NOT NULL",
+		"ALTER TABLE edu_schedule_conflict_override ALTER COLUMN target_type DROP NOT NULL",
+		"ALTER TABLE edu_schedule_conflict_override ALTER COLUMN target_id SET DEFAULT 0",
+		"ON CONFLICT (id) DO UPDATE SET",
+		"DELETE FROM sys_menu_api WHERE menu_id = 140413 AND api_id IN (291, 292)",
+		"'/api/edu/lessons/reschedule', 'PUT'",
+		"'/api/edu/lessons/:id/change-logs', 'GET'",
+		"(140419, 140350, '/edu/statistics'",
+		"SELECT setval('sys_api_id_seq', GREATEST((SELECT last_value FROM sys_api_id_seq), 298), true)",
+		"SELECT setval('sys_menu_id_seq', GREATEST((SELECT last_value FROM sys_menu_id_seq), 140419), true)",
+	}
+
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(sqlText, snippet) {
+			t.Fatalf("edu schedule completion patch missing required snippet: %s", snippet)
 		}
 	}
 }
