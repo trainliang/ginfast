@@ -31,3 +31,15 @@ func TestEduModelsExposeExpectedTableNames(t *testing.T) {
 		}
 	}
 }
+
+func TestEduScheduleBenefitFoundationModelsCompile(t *testing.T) {
+	_ = &EduTerm{}
+	_ = &EduTermClosedDay{}
+	_ = &EduBenefitProduct{}
+	_ = &EduBenefitProductCourse{}
+	_ = &EduStudentBenefit{}
+	_ = &EduBenefitLedger{}
+	_ = &EduBenefitEvent{}
+	_ = &EduBenefitExternalSync{}
+	_ = &EduLessonStudentEligibility{}
+}

@@ -23,6 +23,15 @@ func setupEduTestDB(t *testing.T) *gorm.DB {
 	}
 	if err := db.AutoMigrate(
 		&models.EduCourse{},
+		&models.EduTerm{},
+		&models.EduTermClosedDay{},
+		&models.EduBenefitProduct{},
+		&models.EduBenefitProductCourse{},
+		&models.EduStudentBenefit{},
+		&models.EduBenefitLedger{},
+		&models.EduBenefitEvent{},
+		&models.EduBenefitExternalSync{},
+		&models.EduLessonStudentEligibility{},
 		&models.EduStudent{},
 		&models.EduStudentContact{},
 		&models.EduClass{},

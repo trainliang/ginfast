@@ -10,19 +10,20 @@ import (
 // EduClass 班级模型
 type EduClass struct {
 	BaseModel
-	Name      string    `gorm:"column:name;size:100;not null;comment:班级名称" json:"name"`
-	Code      string    `gorm:"column:code;size:64;not null;comment:班级编码" json:"code"`
-	ClassType string    `gorm:"column:class_type;size:32;not null;comment:班级类型 daycare/group" json:"classType"`
-	CourseID  uint      `gorm:"column:course_id;not null;comment:课程/项目ID" json:"courseId"`
-	TeacherID uint      `gorm:"column:teacher_id;not null;comment:负责教师用户ID" json:"teacherId"`
-	RoomID    uint      `gorm:"column:room_id;default:0;comment:默认场地ID" json:"roomId"`
-	Capacity  int       `gorm:"column:capacity;not null;comment:容量" json:"capacity"`
-	Status    int8      `gorm:"column:status;default:1;comment:状态" json:"status"`
-	StartDate *JSONTime `gorm:"column:start_date;comment:开班日期" json:"startDate"`
-	EndDate   *JSONTime `gorm:"column:end_date;comment:结班日期" json:"endDate"`
-	Remark    string    `gorm:"column:remark;size:500;comment:备注" json:"remark"`
-	CreatedBy uint      `gorm:"column:created_by;default:0;comment:创建人" json:"createdBy"`
-	TenantID  uint      `gorm:"type:int(11);column:tenant_id;comment:租户ID" json:"tenantID"`
+	Name               string    `gorm:"column:name;size:100;not null;comment:班级名称" json:"name"`
+	Code               string    `gorm:"column:code;size:64;not null;comment:班级编码" json:"code"`
+	ClassType          string    `gorm:"column:class_type;size:32;not null;comment:班级类型 daycare/group" json:"classType"`
+	CourseID           uint      `gorm:"column:course_id;not null;comment:课程/项目ID" json:"courseId"`
+	TeacherID          uint      `gorm:"column:teacher_id;not null;comment:负责教师用户ID" json:"teacherId"`
+	RoomID             uint      `gorm:"column:room_id;default:0;comment:默认场地ID" json:"roomId"`
+	Capacity           int       `gorm:"column:capacity;not null;comment:容量" json:"capacity"`
+	BenefitCheckPolicy string    `gorm:"column:benefit_check_policy;size:32;default:'required';comment:权益校验策略 required/warn/none" json:"benefitCheckPolicy"`
+	Status             int8      `gorm:"column:status;default:1;comment:状态" json:"status"`
+	StartDate          *JSONTime `gorm:"column:start_date;comment:开班日期" json:"startDate"`
+	EndDate            *JSONTime `gorm:"column:end_date;comment:结班日期" json:"endDate"`
+	Remark             string    `gorm:"column:remark;size:500;comment:备注" json:"remark"`
+	CreatedBy          uint      `gorm:"column:created_by;default:0;comment:创建人" json:"createdBy"`
+	TenantID           uint      `gorm:"type:int(11);column:tenant_id;comment:租户ID" json:"tenantID"`
 }
 
 // EduClassList 班级列表
