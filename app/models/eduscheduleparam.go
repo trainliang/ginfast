@@ -89,6 +89,81 @@ type EduLessonCalendarRequest struct {
 
 func (r *EduLessonCalendarRequest) Validate(c *gin.Context) error { return r.Validator.Check(c, r) }
 
+type EduLessonRescheduleRequest struct {
+	Validator
+	LessonID              uint      `form:"lessonId" json:"lessonId" validate:"required" message:"课次ID不能为空"`
+	LessonDate            *JSONTime `form:"lessonDate" json:"lessonDate" validate:"required" message:"新日期不能为空"`
+	StartTime             string    `form:"startTime" json:"startTime" validate:"required" message:"新开始时间不能为空"`
+	EndTime               string    `form:"endTime" json:"endTime" validate:"required" message:"新结束时间不能为空"`
+	TeacherID             uint      `form:"teacherId" json:"teacherId" validate:"required" message:"教师ID不能为空"`
+	TeachingMode          string    `form:"teachingMode" json:"teachingMode" validate:"required" message:"授课方式不能为空"`
+	RoomID                *uint     `form:"roomId" json:"roomId"`
+	AllowConflictOverride bool      `form:"allowConflictOverride" json:"allowConflictOverride"`
+	OverrideReason        string    `form:"overrideReason" json:"overrideReason"`
+}
+
+func (r *EduLessonRescheduleRequest) Validate(c *gin.Context) error {
+	return r.Validator.Check(c, r)
+}
+
+type EduLessonStopRequest struct {
+	Validator
+	LessonID uint   `form:"lessonId" json:"lessonId" validate:"required" message:"课次ID不能为空"`
+	Reason   string `form:"reason" json:"reason" validate:"required" message:"停课原因不能为空"`
+}
+
+func (r *EduLessonStopRequest) Validate(c *gin.Context) error {
+	return r.Validator.Check(c, r)
+}
+
+type EduLessonCancelRequest struct {
+	Validator
+	LessonID uint   `form:"lessonId" json:"lessonId" validate:"required" message:"课次ID不能为空"`
+	Reason   string `form:"reason" json:"reason" validate:"required" message:"取消原因不能为空"`
+}
+
+func (r *EduLessonCancelRequest) Validate(c *gin.Context) error {
+	return r.Validator.Check(c, r)
+}
+
+type EduLessonRestoreRequest struct {
+	Validator
+	LessonID uint   `form:"lessonId" json:"lessonId" validate:"required" message:"课次ID不能为空"`
+	Reason   string `form:"reason" json:"reason" validate:"required" message:"恢复原因不能为空"`
+}
+
+func (r *EduLessonRestoreRequest) Validate(c *gin.Context) error {
+	return r.Validator.Check(c, r)
+}
+
+type EduLessonMakeupRequest struct {
+	Validator
+	LessonID              uint      `form:"lessonId" json:"lessonId" validate:"required" message:"课次ID不能为空"`
+	LessonDate            *JSONTime `form:"lessonDate" json:"lessonDate" validate:"required" message:"新日期不能为空"`
+	StartTime             string    `form:"startTime" json:"startTime" validate:"required" message:"新开始时间不能为空"`
+	EndTime               string    `form:"endTime" json:"endTime" validate:"required" message:"新结束时间不能为空"`
+	TeacherID             uint      `form:"teacherId" json:"teacherId" validate:"required" message:"教师ID不能为空"`
+	TeachingMode          string    `form:"teachingMode" json:"teachingMode" validate:"required" message:"授课方式不能为空"`
+	RoomID                *uint     `form:"roomId" json:"roomId"`
+	Reason                string    `form:"reason" json:"reason" validate:"required" message:"补课原因不能为空"`
+	AllowConflictOverride bool      `form:"allowConflictOverride" json:"allowConflictOverride"`
+	OverrideReason        string    `form:"overrideReason" json:"overrideReason"`
+}
+
+func (r *EduLessonMakeupRequest) Validate(c *gin.Context) error {
+	return r.Validator.Check(c, r)
+}
+
+type EduLessonChangeLogListRequest struct {
+	BasePaging
+	Validator
+	LessonID uint `form:"lessonId" json:"lessonId" validate:"required" message:"课次ID不能为空"`
+}
+
+func (r *EduLessonChangeLogListRequest) Validate(c *gin.Context) error {
+	return r.Validator.Check(c, r)
+}
+
 type EduScheduleConflictCheckRequest struct {
 	Validator
 	LessonID              uint      `form:"lessonId" json:"lessonId"`

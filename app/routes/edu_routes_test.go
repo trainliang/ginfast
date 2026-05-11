@@ -91,6 +91,12 @@ func TestEduRoutes(t *testing.T) {
 		"DELETE /api/edu/schedule-rules/delete",
 		"GET /api/edu/lessons/calendar",
 		"GET /api/edu/lessons/list",
+		"PUT /api/edu/lessons/reschedule",
+		"PUT /api/edu/lessons/stop",
+		"PUT /api/edu/lessons/cancel",
+		"PUT /api/edu/lessons/restore",
+		"POST /api/edu/lessons/makeup",
+		"GET /api/edu/lessons/:id/change-logs",
 		"POST /api/edu/schedules/check-conflicts",
 	}
 	for _, route := range want {
