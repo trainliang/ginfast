@@ -32,7 +32,17 @@ func (s *EduScheduleService) DeleteRule(ctx context.Context, tenantID, id uint) 
 
 func (s *EduScheduleService) PreviewRuleChange(ctx context.Context, tenantID, id uint) ([]models.EduLesson, error) {
 	var rows []models.EduLesson
-	err := requireTenant(app.DB().WithContext(ctx).Model(&models.EduLesson{}), tenantID).Where("rule_id = ?", id).Order("lesson_date asc, id asc").Find(&rows).Error
+	db := requireTenant(app.DB().WithContext(ctx).Model(&models.EduLesson{}), tenantID).Where("rule_id = ?", id)
+	var rule models.EduScheduleRule
+	if err := requireTenant(app.DB().WithContext(ctx).Model(&models.EduScheduleRule{}), tenantID).Where("id = ?", id).First(&rule).Error; err != nil {
+		return nil, err
+	}
+	if rule.EffectiveFrom != nil && !rule.EffectiveFrom.Time.IsZero() {
+		db = db.Where("lesson_date >= ?", truncateDate(rule.EffectiveFrom.Time))
+	}
+	db = db.Where("status NOT IN ?", []string{"completed", "canceled", "stopped"}).
+		Where("is_manual_adjusted = 0")
+	err := db.Order("lesson_date asc, id asc").Find(&rows).Error
 	return rows, err
 }
 
@@ -45,7 +55,7 @@ func (s *EduScheduleService) GenerateLessonsForRule(ctx context.Context, ruleID,
 	if err := requireTenant(app.DB().WithContext(ctx).Model(&models.EduScheduleRule{}), tenantID).Where("id = ?", ruleID).First(&rule).Error; err != nil {
 		return nil, err
 	}
-	return s.generateLessonsForRuleTx(ctx, &rule, operatorID)
+	return s.generateLessonsForRuleTxWithDB(ctx, app.DB().WithContext(ctx), &rule, operatorID)
 }
 
 func (s *EduScheduleService) RegenerateFutureLessons(ctx context.Context, tenantID, ruleID, operatorID uint) ([]models.EduLesson, error) {
@@ -53,7 +63,73 @@ func (s *EduScheduleService) RegenerateFutureLessons(ctx context.Context, tenant
 	if err := requireTenant(app.DB().WithContext(ctx).Model(&models.EduScheduleRule{}), tenantID).Where("id = ?", ruleID).First(&rule).Error; err != nil {
 		return nil, err
 	}
-	return s.generateLessonsForRuleTx(ctx, &rule, operatorID)
+	if err := ensureTenantID(tenantID); err != nil {
+		return nil, err
+	}
+	if rule.EffectiveFrom == nil || rule.EffectiveFrom.Time.IsZero() {
+		return s.generateLessonsForRuleTxWithDB(ctx, app.DB().WithContext(ctx), &rule, operatorID)
+	}
+	effectiveFrom := truncateDate(rule.EffectiveFrom.Time)
+	newRuleVersion := rule.Version
+	if newRuleVersion < 1 {
+		newRuleVersion = 1
+	}
+
+	var generated []models.EduLesson
+	err := app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var replaceable []models.EduLesson
+		query := requireTenant(tx.Model(&models.EduLesson{}), tenantID).
+			Where("rule_id = ?", ruleID).
+			Where("lesson_date >= ?", effectiveFrom).
+			Where("status NOT IN ?", []string{"completed", "canceled", "stopped"}).
+			Where("is_manual_adjusted = 0").
+			Order("lesson_date asc, id asc")
+		if err := query.Find(&replaceable).Error; err != nil {
+			return err
+		}
+		if len(replaceable) > 0 {
+			ids := make([]uint, 0, len(replaceable))
+			for _, lesson := range replaceable {
+				ids = append(ids, lesson.ID)
+			}
+			if err := requireTenant(tx.Where("id IN ?", ids), tenantID).Delete(&models.EduLesson{}).Error; err != nil {
+				return err
+			}
+			for _, lesson := range replaceable {
+				beforeData := fmt.Sprintf("lesson_id=%d,version=%d,status=%s,date=%s", lesson.ID, lesson.RuleVersion, lesson.Status, lessonDateString(lesson.LessonDate))
+				afterData := fmt.Sprintf("deleted_for_regeneration=true,rule_version=%d", newRuleVersion)
+				log := &models.EduLessonChangeLog{
+					LessonID:   lesson.ID,
+					RuleID:     ruleID,
+					ActionType: "rule_regenerate",
+					BeforeData: beforeData,
+					AfterData:  afterData,
+					Reason:     "规则变更重算",
+					OperatorID: operatorID,
+					OccurredAt: &models.JSONTime{Time: time.Now().UTC()},
+					TenantID:   tenantID,
+				}
+				if err := tx.Create(log).Error; err != nil {
+					return err
+				}
+			}
+		}
+		dates := make([]time.Time, 0, len(replaceable))
+		for _, lesson := range replaceable {
+			if lesson.LessonDate == nil || lesson.LessonDate.Time.IsZero() {
+				continue
+			}
+			dates = append(dates, truncateDate(lesson.LessonDate.Time))
+		}
+		rule.Version = newRuleVersion
+		created, err := s.generateLessonsForDatesTx(ctx, tx, &rule, operatorID, dates)
+		if err != nil {
+			return err
+		}
+		generated = created
+		return nil
+	})
+	return generated, err
 }
 
 func (s *EduScheduleService) ListLessons(ctx context.Context, tenantID uint, req *models.EduLessonListRequest) ([]models.EduLesson, error) {
@@ -185,6 +261,10 @@ func (s *EduScheduleService) CheckConflicts(ctx context.Context, req *models.Edu
 }
 
 func (s *EduScheduleService) generateLessonsForRuleTx(ctx context.Context, rule *models.EduScheduleRule, operatorID uint) ([]models.EduLesson, error) {
+	return s.generateLessonsForRuleTxWithDB(ctx, app.DB().WithContext(ctx), rule, operatorID)
+}
+
+func (s *EduScheduleService) generateLessonsForRuleTxWithDB(ctx context.Context, db *gorm.DB, rule *models.EduScheduleRule, operatorID uint) ([]models.EduLesson, error) {
 	if rule == nil {
 		return nil, errors.New("规则不能为空")
 	}
@@ -217,37 +297,47 @@ func (s *EduScheduleService) generateLessonsForRuleTx(ctx context.Context, rule 
 	}
 
 	var lessons []models.EduLesson
-	err = app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		for _, lessonDate := range lessonDates {
-			lesson := models.EduLesson{
-				RuleID:       rule.ID,
-				RuleVersion:  rule.Version,
-				LessonType:   rule.RuleType,
-				LessonDate:   &models.JSONTime{Time: lessonDate},
-				StartTime:    rule.StartTime,
-				EndTime:      rule.EndTime,
-				ClassID:      rule.ClassID,
-				StudentID:    rule.StudentID,
-				CourseID:     rule.CourseID,
-				TeacherID:    rule.TeacherID,
-				TeachingMode: rule.TeachingMode,
-				RequiresRoom: rule.RequiresRoom,
-				RoomID:       rule.RoomID,
-				Status:       "scheduled",
-				CreatedBy:    operatorID,
-				TenantID:     tenantID,
-			}
-			if err := tx.Create(&lesson).Error; err != nil {
-				return err
-			}
-			if err := s.writeEligibilityRowsTx(tx, ctx, &lesson, rule); err != nil {
-				return err
-			}
-			lessons = append(lessons, lesson)
+	err = db.Transaction(func(tx *gorm.DB) error {
+		created, err := s.generateLessonsForDatesTx(ctx, tx, rule, operatorID, lessonDates)
+		if err != nil {
+			return err
 		}
+		lessons = created
 		return nil
 	})
 	return lessons, err
+}
+
+func (s *EduScheduleService) generateLessonsForDatesTx(ctx context.Context, tx *gorm.DB, rule *models.EduScheduleRule, operatorID uint, lessonDates []time.Time) ([]models.EduLesson, error) {
+	var lessons []models.EduLesson
+	for _, lessonDate := range lessonDates {
+		lesson := models.EduLesson{
+			RuleID:       rule.ID,
+			RuleVersion:  rule.Version,
+			LessonType:   rule.RuleType,
+			LessonDate:   &models.JSONTime{Time: lessonDate},
+			StartTime:    rule.StartTime,
+			EndTime:      rule.EndTime,
+			ClassID:      rule.ClassID,
+			StudentID:    rule.StudentID,
+			CourseID:     rule.CourseID,
+			TeacherID:    rule.TeacherID,
+			TeachingMode: rule.TeachingMode,
+			RequiresRoom: rule.RequiresRoom,
+			RoomID:       rule.RoomID,
+			Status:       "scheduled",
+			CreatedBy:    operatorID,
+			TenantID:     rule.TenantID,
+		}
+		if err := tx.Create(&lesson).Error; err != nil {
+			return nil, err
+		}
+		if err := s.writeEligibilityRowsTx(tx, ctx, &lesson, rule); err != nil {
+			return nil, err
+		}
+		lessons = append(lessons, lesson)
+	}
+	return lessons, nil
 }
 
 func (s *EduScheduleService) resolveScheduleWindow(ctx context.Context, rule *models.EduScheduleRule) (time.Time, time.Time, error) {
@@ -485,6 +575,13 @@ func validateLessonRoom(rule *models.EduScheduleRule) error {
 
 func truncateDate(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+}
+
+func lessonDateString(value *models.JSONTime) string {
+	if value == nil || value.Time.IsZero() {
+		return ""
+	}
+	return value.Time.Format("2006-01-02")
 }
 
 func appendConflict(result *models.EduScheduleConflictCheckResult, seen map[string]struct{}, conflictType, conflictKey string, matched bool) {

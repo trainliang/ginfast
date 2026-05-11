@@ -530,6 +530,168 @@ func TestEduScheduleServiceConflictOverrideRequiresReasonAndRecordsOverride(t *t
 	}
 }
 
+func TestEduScheduleServiceRuleChangePreviewAndRegenerate(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduScheduleService()
+	ctx := contextWithTenant(1)
+	seedEduTenantData(t, 1)
+	seedStudent(t, db, 1, 1)
+	seedStudent(t, db, 1, 2)
+	seedStudent(t, db, 1, 3)
+	seedStudent(t, db, 1, 4)
+
+	rule := &models.EduScheduleRule{
+		RuleType:      "one_to_one",
+		RepeatType:    "weekly",
+		StudentID:     1,
+		CourseID:      1,
+		TeacherID:     1,
+		TeachingMode:  "offline",
+		RequiresRoom:  1,
+		RoomID:        1,
+		Weekday:       1,
+		StartTime:     "09:00",
+		EndTime:       "10:00",
+		StartDate:     datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
+		EndDate:       datePtr(time.Date(2026, 5, 25, 0, 0, 0, 0, time.UTC)),
+		Status:        1,
+		Version:       1,
+		EffectiveFrom: datePtr(time.Date(2026, 5, 18, 0, 0, 0, 0, time.UTC)),
+		TenantID:      1,
+	}
+	if err := db.Create(rule).Error; err != nil {
+		t.Fatalf("seed rule: %v", err)
+	}
+
+	seedExistingLesson(t, db, 1, &models.EduLesson{
+		RuleID:      rule.ID,
+		RuleVersion: 1,
+		LessonType:  "one_to_one",
+		LessonDate:  datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
+		StartTime:   "09:00",
+		EndTime:     "10:00",
+		StudentID:   1,
+		CourseID:    1,
+		TeacherID:   1,
+		Status:      "scheduled",
+	})
+	seedExistingLesson(t, db, 1, &models.EduLesson{
+		RuleID:      rule.ID,
+		RuleVersion: 1,
+		LessonType:  "one_to_one",
+		LessonDate:  datePtr(time.Date(2026, 5, 18, 0, 0, 0, 0, time.UTC)),
+		StartTime:   "09:00",
+		EndTime:     "10:00",
+		StudentID:   2,
+		CourseID:    1,
+		TeacherID:   1,
+		Status:      "scheduled",
+	})
+	seedExistingLesson(t, db, 1, &models.EduLesson{
+		RuleID:      rule.ID,
+		RuleVersion: 1,
+		LessonType:  "one_to_one",
+		LessonDate:  datePtr(time.Date(2026, 5, 25, 0, 0, 0, 0, time.UTC)),
+		StartTime:   "09:00",
+		EndTime:     "10:00",
+		StudentID:   3,
+		CourseID:    1,
+		TeacherID:   1,
+		Status:      "completed",
+	})
+	seedExistingLesson(t, db, 1, &models.EduLesson{
+		RuleID:           rule.ID,
+		RuleVersion:      1,
+		LessonType:       "one_to_one",
+		LessonDate:       datePtr(time.Date(2026, 5, 26, 0, 0, 0, 0, time.UTC)),
+		StartTime:        "09:00",
+		EndTime:          "10:00",
+		StudentID:        4,
+		CourseID:         1,
+		TeacherID:        1,
+		Status:           "scheduled",
+		IsManualAdjusted: 1,
+	})
+	seedExistingLesson(t, db, 1, &models.EduLesson{
+		RuleID:      rule.ID,
+		RuleVersion: 1,
+		LessonType:  "one_to_one",
+		LessonDate:  datePtr(time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC)),
+		StartTime:   "09:00",
+		EndTime:     "10:00",
+		StudentID:   1,
+		CourseID:    1,
+		TeacherID:   1,
+		Status:      "scheduled",
+	})
+
+	preview, err := svc.PreviewRuleChange(ctx, 1, rule.ID)
+	if err != nil {
+		t.Fatalf("preview rule change: %v", err)
+	}
+	if len(preview) != 1 {
+		t.Fatalf("expected 1 replaceable future lesson, got %d", len(preview))
+	}
+	if preview[0].LessonDate == nil || !preview[0].LessonDate.Time.Equal(time.Date(2026, 5, 18, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("unexpected preview first lesson: %+v", preview[0])
+	}
+
+	rule.Version = 2
+	if err := db.Model(&models.EduScheduleRule{}).Where("id = ?", rule.ID).Update("version", 2).Error; err != nil {
+		t.Fatalf("bump rule version: %v", err)
+	}
+	regenerated, err := svc.RegenerateFutureLessons(ctx, 1, rule.ID, 99)
+	if err != nil {
+		t.Fatalf("regenerate future lessons: %v", err)
+	}
+	if len(regenerated) != 1 {
+		t.Fatalf("expected 1 regenerated lesson, got %d", len(regenerated))
+	}
+	for _, lesson := range regenerated {
+		if lesson.RuleVersion != 2 {
+			t.Fatalf("expected regenerated lesson version 2, got %+v", lesson)
+		}
+		if lesson.LessonDate != nil && lesson.LessonDate.Time.Before(time.Date(2026, 5, 18, 0, 0, 0, 0, time.UTC)) {
+			t.Fatalf("regenerated lesson should not include past lessons: %+v", lesson)
+		}
+	}
+
+	var lessons []models.EduLesson
+	if err := db.Order("lesson_date asc, id asc").Find(&lessons).Error; err != nil {
+		t.Fatalf("load lessons: %v", err)
+	}
+	if len(lessons) != 5 {
+		t.Fatalf("expected 5 lessons after regeneration, got %d", len(lessons))
+	}
+	for _, lesson := range lessons {
+		if lesson.Status == "completed" || lesson.IsManualAdjusted == 1 {
+			continue
+		}
+		if lesson.LessonDate == nil {
+			t.Fatalf("lesson date missing: %+v", lesson)
+		}
+		if !lesson.LessonDate.Time.Before(time.Date(2026, 5, 18, 0, 0, 0, 0, time.UTC)) && lesson.RuleVersion != 2 {
+			t.Fatalf("expected future replaceable lessons to use new version: %+v", lesson)
+		}
+	}
+
+	var logs []models.EduLessonChangeLog
+	if err := db.Order("id asc").Find(&logs).Error; err != nil {
+		t.Fatalf("load change logs: %v", err)
+	}
+	if len(logs) != 1 {
+		t.Fatalf("expected 1 change log, got %d", len(logs))
+	}
+	for _, log := range logs {
+		if log.ActionType != "rule_regenerate" {
+			t.Fatalf("unexpected action type: %+v", log)
+		}
+		if log.OperatorID != 99 {
+			t.Fatalf("unexpected operator id: %+v", log)
+		}
+	}
+}
+
 func seedStudent(t *testing.T, db *gorm.DB, tenantID, id uint) {
 	t.Helper()
 	if err := db.Create(&models.EduStudent{BaseModel: models.BaseModel{ID: id}, Name: fmt.Sprintf("学生-%d", id), Phone: fmt.Sprintf("1380000%04d", id), TenantID: tenantID}).Error; err != nil {
