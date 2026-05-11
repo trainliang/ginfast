@@ -105,6 +105,85 @@ func (s *EduScheduleService) CalendarLessons(ctx context.Context, tenantID uint,
 	return rows, db.Order("lesson_date asc, start_time asc, id asc").Find(&rows).Error
 }
 
+func (s *EduScheduleService) CheckConflicts(ctx context.Context, req *models.EduScheduleConflictCheckRequest) (*models.EduScheduleConflictCheckResult, error) {
+	if req == nil {
+		return nil, errors.New("请求不能为空")
+	}
+	tenantID := tenantIDFromContext(ctx)
+	if tenantID == 0 {
+		return nil, errors.New("缺少租户信息")
+	}
+	if req.LessonDate == nil || req.LessonDate.Time.IsZero() {
+		return nil, errors.New("课次日期不能为空")
+	}
+	newStart, err := parseHHMM(req.StartTime)
+	if err != nil {
+		return nil, fmt.Errorf("开始时间格式错误: %w", err)
+	}
+	newEnd, err := parseHHMM(req.EndTime)
+	if err != nil {
+		return nil, fmt.Errorf("结束时间格式错误: %w", err)
+	}
+	if newEnd <= newStart {
+		return nil, errors.New("结束时间必须晚于开始时间")
+	}
+
+	var lessons []models.EduLesson
+	query := requireTenant(app.DB().WithContext(ctx).Model(&models.EduLesson{}), tenantID).
+		Where("lesson_date = ? AND status = ?", truncateDate(req.LessonDate.Time), "scheduled")
+	if req.LessonID != 0 {
+		query = query.Where("id <> ?", req.LessonID)
+	}
+	if err := query.Order("id asc").Find(&lessons).Error; err != nil {
+		return nil, err
+	}
+	result := &models.EduScheduleConflictCheckResult{}
+	seen := map[string]struct{}{}
+	for _, lesson := range lessons {
+		existingStart, err := parseHHMM(lesson.StartTime)
+		if err != nil {
+			return nil, fmt.Errorf("既有课次开始时间格式错误: %w", err)
+		}
+		existingEnd, err := parseHHMM(lesson.EndTime)
+		if err != nil {
+			return nil, fmt.Errorf("既有课次结束时间格式错误: %w", err)
+		}
+		if !(newStart < existingEnd && existingStart < newEnd) {
+			continue
+		}
+		appendConflict(result, seen, "teacher", fmt.Sprintf("%d", req.TeacherID), req.TeacherID != 0 && lesson.TeacherID == req.TeacherID)
+		appendConflict(result, seen, "room", fmt.Sprintf("%d", req.RoomID), req.RequiresRoom == 1 && req.RoomID != 0 && lesson.RequiresRoom == 1 && lesson.RoomID == req.RoomID)
+		appendConflict(result, seen, "student", fmt.Sprintf("%d", req.StudentID), req.StudentID != 0 && lesson.StudentID == req.StudentID)
+		appendConflict(result, seen, "class", fmt.Sprintf("%d", req.ClassID), req.ClassID != 0 && lesson.ClassID == req.ClassID)
+	}
+	if !result.HasConflict {
+		return result, nil
+	}
+	if !req.AllowConflictOverride {
+		return result, errors.New("存在排课冲突")
+	}
+	if strings.TrimSpace(req.OverrideReason) == "" {
+		return result, errors.New("覆盖冲突必须填写原因")
+	}
+	now := models.NewJSONTime(time.Now().UTC())
+	for _, item := range result.Items {
+		override := &models.EduScheduleConflictOverride{
+			RuleID:       req.RuleID,
+			LessonID:     req.LessonID,
+			ConflictType: item.ConflictType,
+			ConflictKey:  item.ConflictKey,
+			Reason:       strings.TrimSpace(req.OverrideReason),
+			OperatorID:   req.OperatorID,
+			OccurredAt:   &now,
+			TenantID:     tenantID,
+		}
+		if err := app.DB().WithContext(ctx).Create(override).Error; err != nil {
+			return result, err
+		}
+	}
+	return result, nil
+}
+
 func (s *EduScheduleService) generateLessonsForRuleTx(ctx context.Context, rule *models.EduScheduleRule, operatorID uint) ([]models.EduLesson, error) {
 	if rule == nil {
 		return nil, errors.New("规则不能为空")
@@ -406,4 +485,21 @@ func validateLessonRoom(rule *models.EduScheduleRule) error {
 
 func truncateDate(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+}
+
+func appendConflict(result *models.EduScheduleConflictCheckResult, seen map[string]struct{}, conflictType, conflictKey string, matched bool) {
+	if !matched {
+		return
+	}
+	key := conflictType + ":" + conflictKey
+	if _, ok := seen[key]; ok {
+		return
+	}
+	seen[key] = struct{}{}
+	result.HasConflict = true
+	result.Items = append(result.Items, models.EduScheduleConflictItem{
+		ConflictType: conflictType,
+		ConflictKey:  conflictKey,
+		Reason:       "时间段冲突",
+	})
 }

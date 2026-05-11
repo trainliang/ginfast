@@ -339,6 +339,197 @@ func TestEduScheduleServiceGenerateNoneClassPolicySkipsEligibilityRows(t *testin
 	}
 }
 
+func TestEduScheduleServiceConflictRejectsTeacherOverlap(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduScheduleService()
+	ctx := contextWithTenant(1)
+	seedExistingLesson(t, db, 1, &models.EduLesson{
+		LessonType:   "one_to_one",
+		LessonDate:   datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
+		StartTime:    "09:00",
+		EndTime:      "10:00",
+		StudentID:    1,
+		CourseID:     1,
+		TeacherID:    7,
+		TeachingMode: "online",
+		RequiresRoom: 0,
+		Status:       "scheduled",
+	})
+
+	result, err := svc.CheckConflicts(ctx, &models.EduScheduleConflictCheckRequest{
+		LessonDate:   datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
+		StartTime:    "09:30",
+		EndTime:      "10:30",
+		StudentID:    2,
+		CourseID:     1,
+		TeacherID:    7,
+		TeachingMode: "online",
+		RequiresRoom: 0,
+	})
+	if err == nil {
+		t.Fatalf("expected teacher conflict error")
+	}
+	if result == nil || !result.HasConflict || len(result.Items) != 1 || result.Items[0].ConflictType != "teacher" {
+		t.Fatalf("expected teacher conflict result, got %+v", result)
+	}
+}
+
+func TestEduScheduleServiceConflictRejectsRoomOverlap(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduScheduleService()
+	ctx := contextWithTenant(1)
+	seedExistingLesson(t, db, 1, &models.EduLesson{
+		LessonType:   "class",
+		LessonDate:   datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
+		StartTime:    "09:00",
+		EndTime:      "10:00",
+		ClassID:      1,
+		CourseID:     1,
+		TeacherID:    7,
+		TeachingMode: "offline",
+		RequiresRoom: 1,
+		RoomID:       3,
+		Status:       "scheduled",
+	})
+
+	result, err := svc.CheckConflicts(ctx, &models.EduScheduleConflictCheckRequest{
+		LessonDate:   datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
+		StartTime:    "09:30",
+		EndTime:      "10:30",
+		ClassID:      2,
+		CourseID:     1,
+		TeacherID:    8,
+		TeachingMode: "offline",
+		RequiresRoom: 1,
+		RoomID:       3,
+	})
+	if err == nil {
+		t.Fatalf("expected room conflict error")
+	}
+	if result == nil || !result.HasConflict || len(result.Items) != 1 || result.Items[0].ConflictType != "room" {
+		t.Fatalf("expected room conflict result, got %+v", result)
+	}
+}
+
+func TestEduScheduleServiceConflictRejectsStudentOverlap(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduScheduleService()
+	ctx := contextWithTenant(1)
+	seedExistingLesson(t, db, 1, &models.EduLesson{
+		LessonType:   "one_to_one",
+		LessonDate:   datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
+		StartTime:    "09:00",
+		EndTime:      "10:00",
+		StudentID:    5,
+		CourseID:     1,
+		TeacherID:    7,
+		TeachingMode: "online",
+		RequiresRoom: 0,
+		Status:       "scheduled",
+	})
+
+	result, err := svc.CheckConflicts(ctx, &models.EduScheduleConflictCheckRequest{
+		LessonDate:   datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
+		StartTime:    "09:30",
+		EndTime:      "10:30",
+		StudentID:    5,
+		CourseID:     1,
+		TeacherID:    8,
+		TeachingMode: "online",
+		RequiresRoom: 0,
+	})
+	if err == nil {
+		t.Fatalf("expected student conflict error")
+	}
+	if result == nil || !result.HasConflict || len(result.Items) != 1 || result.Items[0].ConflictType != "student" {
+		t.Fatalf("expected student conflict result, got %+v", result)
+	}
+}
+
+func TestEduScheduleServiceConflictRejectsClassOverlap(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduScheduleService()
+	ctx := contextWithTenant(1)
+	seedExistingLesson(t, db, 1, &models.EduLesson{
+		LessonType:   "class",
+		LessonDate:   datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
+		StartTime:    "09:00",
+		EndTime:      "10:00",
+		ClassID:      9,
+		CourseID:     1,
+		TeacherID:    7,
+		TeachingMode: "online",
+		RequiresRoom: 0,
+		Status:       "scheduled",
+	})
+
+	result, err := svc.CheckConflicts(ctx, &models.EduScheduleConflictCheckRequest{
+		LessonDate:   datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
+		StartTime:    "09:30",
+		EndTime:      "10:30",
+		ClassID:      9,
+		CourseID:     1,
+		TeacherID:    8,
+		TeachingMode: "online",
+		RequiresRoom: 0,
+	})
+	if err == nil {
+		t.Fatalf("expected class conflict error")
+	}
+	if result == nil || !result.HasConflict || len(result.Items) != 1 || result.Items[0].ConflictType != "class" {
+		t.Fatalf("expected class conflict result, got %+v", result)
+	}
+}
+
+func TestEduScheduleServiceConflictOverrideRequiresReasonAndRecordsOverride(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduScheduleService()
+	ctx := contextWithTenant(1)
+	seedExistingLesson(t, db, 1, &models.EduLesson{
+		LessonType:   "one_to_one",
+		LessonDate:   datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
+		StartTime:    "09:00",
+		EndTime:      "10:00",
+		StudentID:    1,
+		CourseID:     1,
+		TeacherID:    7,
+		TeachingMode: "online",
+		RequiresRoom: 0,
+		Status:       "scheduled",
+	})
+	req := &models.EduScheduleConflictCheckRequest{
+		LessonDate:            datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
+		StartTime:             "09:30",
+		EndTime:               "10:30",
+		StudentID:             2,
+		CourseID:              1,
+		TeacherID:             7,
+		TeachingMode:          "online",
+		RequiresRoom:          0,
+		AllowConflictOverride: true,
+		OperatorID:            99,
+	}
+	if _, err := svc.CheckConflicts(ctx, req); err == nil {
+		t.Fatalf("expected override without reason to fail")
+	}
+
+	req.OverrideReason = "管理员确认可覆盖"
+	result, err := svc.CheckConflicts(ctx, req)
+	if err != nil {
+		t.Fatalf("override conflict: %v", err)
+	}
+	if result == nil || !result.HasConflict || len(result.Items) != 1 {
+		t.Fatalf("expected conflict result with override, got %+v", result)
+	}
+	var overrides []models.EduScheduleConflictOverride
+	if err := db.Find(&overrides).Error; err != nil {
+		t.Fatalf("load overrides: %v", err)
+	}
+	if len(overrides) != 1 || overrides[0].ConflictType != "teacher" || overrides[0].Reason != "管理员确认可覆盖" || overrides[0].OperatorID != 99 {
+		t.Fatalf("unexpected override row: %+v", overrides)
+	}
+}
+
 func seedStudent(t *testing.T, db *gorm.DB, tenantID, id uint) {
 	t.Helper()
 	if err := db.Create(&models.EduStudent{BaseModel: models.BaseModel{ID: id}, Name: fmt.Sprintf("学生-%d", id), Phone: fmt.Sprintf("1380000%04d", id), TenantID: tenantID}).Error; err != nil {
@@ -393,4 +584,15 @@ func seedBenefitProductAndStudentBenefitForSchedule(t *testing.T, db *gorm.DB, t
 
 func datePtr(t time.Time) *models.JSONTime {
 	return &models.JSONTime{Time: t}
+}
+
+func seedExistingLesson(t *testing.T, db *gorm.DB, tenantID uint, lesson *models.EduLesson) {
+	t.Helper()
+	lesson.TenantID = tenantID
+	if lesson.Status == "" {
+		lesson.Status = "scheduled"
+	}
+	if err := db.Create(lesson).Error; err != nil {
+		t.Fatalf("seed existing lesson: %v", err)
+	}
 }

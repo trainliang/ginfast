@@ -88,8 +88,21 @@ func (r *EduLessonCalendarRequest) Validate(c *gin.Context) error { return r.Val
 
 type EduScheduleConflictCheckRequest struct {
 	Validator
-	LessonID uint `form:"lessonId" json:"lessonId"`
-	RuleID   uint `form:"ruleId" json:"ruleId"`
+	LessonID              uint      `form:"lessonId" json:"lessonId"`
+	RuleID                uint      `form:"ruleId" json:"ruleId"`
+	LessonDate            *JSONTime `form:"lessonDate" json:"lessonDate"`
+	StartTime             string    `form:"startTime" json:"startTime"`
+	EndTime               string    `form:"endTime" json:"endTime"`
+	ClassID               uint      `form:"classId" json:"classId"`
+	StudentID             uint      `form:"studentId" json:"studentId"`
+	CourseID              uint      `form:"courseId" json:"courseId"`
+	TeacherID             uint      `form:"teacherId" json:"teacherId"`
+	TeachingMode          string    `form:"teachingMode" json:"teachingMode"`
+	RequiresRoom          int8      `form:"requiresRoom" json:"requiresRoom"`
+	RoomID                uint      `form:"roomId" json:"roomId"`
+	AllowConflictOverride bool      `form:"allowConflictOverride" json:"allowConflictOverride"`
+	OverrideReason        string    `form:"overrideReason" json:"overrideReason"`
+	OperatorID            uint      `form:"operatorID" json:"operatorID"`
 }
 
 func (r *EduScheduleConflictCheckRequest) Validate(c *gin.Context) error {
