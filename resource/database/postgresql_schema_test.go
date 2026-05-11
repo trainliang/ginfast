@@ -146,6 +146,38 @@ func TestPostgreSQLSchemaIncludesEduScheduleRulesPatch(t *testing.T) {
 	}
 }
 
+func TestPostgreSQLSchemaIncludesEduStatisticsPermissionsPatch(t *testing.T) {
+	sqlBytes, err := os.ReadFile("patches/2026-05-11-edu-statistics-permissions-postgresql.sql")
+	if err != nil {
+		t.Fatalf("read edu statistics permissions patch: %v", err)
+	}
+	sqlText := string(sqlBytes)
+
+	requiredSnippets := []string{
+		"INSERT INTO sys_api (id, title, path, method, api_group, created_at, updated_at, deleted_at, created_by) VALUES",
+		"'/api/edu/statistics/schedule', 'GET'",
+		"'/api/edu/statistics/benefits', 'GET'",
+		"'/api/edu/statistics/external-sync', 'GET'",
+		"INSERT INTO sys_menu (id, parent_id, path, name, redirect, component, title, is_full, hide, disable, keep_alive, affix, link, iframe, svg_icon, icon, sort, type, is_link, permission, created_at, updated_at, deleted_at, created_by) VALUES",
+		"'/edu/statistics', 'EduStatistics', '', 'edu/statistics/statistics', '运营统计'",
+		"'edu:statistics:view'",
+		"INSERT INTO sys_menu_api (menu_id, api_id) VALUES",
+		"INSERT INTO sys_casbin_rule (ptype, v0, v1, v2, v3, v4, v5)",
+		"/api/edu/statistics/schedule",
+		"/api/edu/statistics/benefits",
+		"/api/edu/statistics/external-sync",
+		"UPDATE sys_tenants",
+		"SELECT setval('sys_api_id_seq', GREATEST((SELECT last_value FROM sys_api_id_seq), 292), true)",
+		"SELECT setval('sys_menu_id_seq', GREATEST((SELECT last_value FROM sys_menu_id_seq), 140413), true)",
+	}
+
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(sqlText, snippet) {
+			t.Fatalf("edu statistics permissions patch missing required snippet: %s", snippet)
+		}
+	}
+}
+
 func TestPostgreSQLConvertedIncludesEducationFoundationSeed(t *testing.T) {
 	sqlBytes, err := os.ReadFile("postgresql_converted.sql")
 	if err != nil {
