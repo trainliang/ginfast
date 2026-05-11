@@ -2,6 +2,7 @@ package service
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -528,6 +529,280 @@ func TestEduScheduleServiceConflictOverrideRequiresReasonAndRecordsOverride(t *t
 	if len(overrides) != 1 || overrides[0].ConflictType != "teacher" || overrides[0].Reason != "管理员确认可覆盖" || overrides[0].OperatorID != 99 {
 		t.Fatalf("unexpected override row: %+v", overrides)
 	}
+}
+
+func TestEduScheduleServiceRescheduleLesson(t *testing.T) {
+	t.Run("updates date time teacher room and logs change", func(t *testing.T) {
+		db := setupEduTestDB(t)
+		svc := NewEduScheduleService()
+		ctx := contextWithTenant(1)
+		seedEduTenantData(t, 1)
+		seedStudent(t, db, 1, 1)
+		seedBenefitProductAndStudentBenefitForSchedule(t, db, 1, 1, 1, 1, time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 6, 30, 0, 0, 0, 0, time.UTC))
+
+		lesson := &models.EduLesson{
+			LessonType:   "one_to_one",
+			LessonDate:   datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
+			StartTime:    "09:00",
+			EndTime:      "10:00",
+			StudentID:    1,
+			CourseID:     1,
+			TeacherID:    7,
+			TeachingMode: "offline",
+			RequiresRoom: 1,
+			RoomID:       3,
+			Status:       "scheduled",
+			TenantID:     1,
+		}
+		seedExistingLesson(t, db, 1, lesson)
+
+		err := svc.RescheduleLesson(ctx, 1, &models.EduLessonRescheduleRequest{
+			LessonID:   lesson.ID,
+			LessonDate: datePtr(time.Date(2026, 5, 12, 0, 0, 0, 0, time.UTC)),
+			StartTime:  "10:00",
+			EndTime:    "11:00",
+			TeacherID:  8,
+			TeachingMode: "offline",
+			RoomID:    uintPtr(5),
+		})
+		if err != nil {
+			t.Fatalf("reschedule lesson: %v", err)
+		}
+
+		var updated models.EduLesson
+		if err := db.First(&updated, lesson.ID).Error; err != nil {
+			t.Fatalf("load lesson: %v", err)
+		}
+		if updated.LessonDate == nil || !updated.LessonDate.Time.Equal(time.Date(2026, 5, 12, 0, 0, 0, 0, time.UTC)) {
+			t.Fatalf("unexpected lesson date: %+v", updated)
+		}
+		if updated.StartTime != "10:00" || updated.EndTime != "11:00" || updated.TeacherID != 8 || updated.RoomID != 5 {
+			t.Fatalf("unexpected updated lesson: %+v", updated)
+		}
+		if updated.IsManualAdjusted != 1 {
+			t.Fatalf("expected manual adjusted lesson, got %+v", updated)
+		}
+
+		var logs []models.EduLessonChangeLog
+		if err := db.Order("id asc").Find(&logs).Error; err != nil {
+			t.Fatalf("load change logs: %v", err)
+		}
+		if len(logs) != 1 {
+			t.Fatalf("expected 1 change log, got %d", len(logs))
+		}
+		if logs[0].ActionType != "reschedule" || logs[0].LessonID != lesson.ID {
+			t.Fatalf("unexpected change log: %+v", logs[0])
+		}
+		if logs[0].BeforeData == "" || logs[0].AfterData == "" {
+			t.Fatalf("expected before/after data in log: %+v", logs[0])
+		}
+		if !strings.Contains(logs[0].BeforeData, "2026-05-11") || !strings.Contains(logs[0].AfterData, "2026-05-12") {
+			t.Fatalf("unexpected change log payload: %+v", logs[0])
+		}
+	})
+
+	t.Run("conflict rejects normal user", func(t *testing.T) {
+		db := setupEduTestDB(t)
+		svc := NewEduScheduleService()
+		ctx := contextWithTenant(1)
+		seedEduTenantData(t, 1)
+		seedStudent(t, db, 1, 1)
+		seedStudent(t, db, 1, 2)
+		seedBenefitProductAndStudentBenefitForSchedule(t, db, 1, 1, 1, 1, time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 6, 30, 0, 0, 0, 0, time.UTC))
+		seedBenefitProductAndStudentBenefitForSchedule(t, db, 1, 2, 2, 1, time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 6, 30, 0, 0, 0, 0, time.UTC))
+
+		lesson := &models.EduLesson{
+			LessonType:   "one_to_one",
+			LessonDate:   datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
+			StartTime:    "09:00",
+			EndTime:      "10:00",
+			StudentID:    1,
+			CourseID:     1,
+			TeacherID:    7,
+			TeachingMode: "online",
+			RequiresRoom: 0,
+			Status:       "scheduled",
+			TenantID:     1,
+		}
+		seedExistingLesson(t, db, 1, lesson)
+		seedExistingLesson(t, db, 1, &models.EduLesson{
+			LessonType:   "one_to_one",
+			LessonDate:   datePtr(time.Date(2026, 5, 12, 0, 0, 0, 0, time.UTC)),
+			StartTime:    "10:30",
+			EndTime:      "11:30",
+			StudentID:    2,
+			CourseID:     1,
+			TeacherID:    8,
+			TeachingMode: "online",
+			RequiresRoom: 0,
+			Status:       "scheduled",
+			TenantID:     1,
+		})
+
+		err := svc.RescheduleLesson(ctx, 1, &models.EduLessonRescheduleRequest{
+			LessonID:    lesson.ID,
+			LessonDate:  datePtr(time.Date(2026, 5, 12, 0, 0, 0, 0, time.UTC)),
+			StartTime:   "10:00",
+			EndTime:     "11:00",
+			TeacherID:   8,
+			TeachingMode: "online",
+		})
+		if err == nil {
+			t.Fatalf("expected conflict to be rejected")
+		}
+		var overrides []models.EduScheduleConflictOverride
+		if err := db.Find(&overrides).Error; err != nil {
+			t.Fatalf("load overrides: %v", err)
+		}
+		if len(overrides) != 0 {
+			t.Fatalf("expected no conflict override rows, got %+v", overrides)
+		}
+	})
+
+	t.Run("admin override writes conflict override", func(t *testing.T) {
+		db := setupEduTestDB(t)
+		svc := NewEduScheduleService()
+		ctx := contextWithTenant(1)
+		seedEduTenantData(t, 1)
+		seedStudent(t, db, 1, 1)
+		seedStudent(t, db, 1, 2)
+		seedBenefitProductAndStudentBenefitForSchedule(t, db, 1, 1, 1, 1, time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 6, 30, 0, 0, 0, 0, time.UTC))
+		seedBenefitProductAndStudentBenefitForSchedule(t, db, 1, 2, 2, 1, time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 6, 30, 0, 0, 0, 0, time.UTC))
+
+		lesson := &models.EduLesson{
+			LessonType:   "one_to_one",
+			LessonDate:   datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
+			StartTime:    "09:00",
+			EndTime:      "10:00",
+			StudentID:    1,
+			CourseID:     1,
+			TeacherID:    7,
+			TeachingMode: "online",
+			RequiresRoom: 0,
+			Status:       "scheduled",
+			TenantID:     1,
+		}
+		seedExistingLesson(t, db, 1, lesson)
+		seedExistingLesson(t, db, 1, &models.EduLesson{
+			LessonType:   "one_to_one",
+			LessonDate:   datePtr(time.Date(2026, 5, 12, 0, 0, 0, 0, time.UTC)),
+			StartTime:    "10:30",
+			EndTime:      "11:30",
+			StudentID:    2,
+			CourseID:     1,
+			TeacherID:    8,
+			TeachingMode: "online",
+			RequiresRoom: 0,
+			Status:       "scheduled",
+			TenantID:     1,
+		})
+
+		err := svc.RescheduleLesson(ctx, 1, &models.EduLessonRescheduleRequest{
+			LessonID:              lesson.ID,
+			LessonDate:            datePtr(time.Date(2026, 5, 12, 0, 0, 0, 0, time.UTC)),
+			StartTime:             "10:00",
+			EndTime:               "11:00",
+			TeacherID:             8,
+			TeachingMode:          "online",
+			AllowConflictOverride: true,
+			OverrideReason:        "管理员确认可覆盖",
+		})
+		if err != nil {
+			t.Fatalf("reschedule with override: %v", err)
+		}
+		var overrides []models.EduScheduleConflictOverride
+		if err := db.Order("id asc").Find(&overrides).Error; err != nil {
+			t.Fatalf("load overrides: %v", err)
+		}
+		if len(overrides) != 1 {
+			t.Fatalf("expected 1 override row, got %+v", overrides)
+		}
+		if overrides[0].Reason != "管理员确认可覆盖" || overrides[0].ConflictType == "" || overrides[0].ConflictKey == "" {
+			t.Fatalf("unexpected override row: %+v", overrides[0])
+		}
+	})
+
+	t.Run("completed lesson is blocked", func(t *testing.T) {
+		db := setupEduTestDB(t)
+		svc := NewEduScheduleService()
+		ctx := contextWithTenant(1)
+		seedEduTenantData(t, 1)
+		seedStudent(t, db, 1, 1)
+		seedBenefitProductAndStudentBenefitForSchedule(t, db, 1, 1, 1, 1, time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 6, 30, 0, 0, 0, 0, time.UTC))
+
+		lesson := &models.EduLesson{
+			LessonType:   "one_to_one",
+			LessonDate:   datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
+			StartTime:    "09:00",
+			EndTime:      "10:00",
+			StudentID:    1,
+			CourseID:     1,
+			TeacherID:    7,
+			TeachingMode: "online",
+			RequiresRoom: 0,
+			Status:       "completed",
+			TenantID:     1,
+		}
+		seedExistingLesson(t, db, 1, lesson)
+
+		err := svc.RescheduleLesson(ctx, 1, &models.EduLessonRescheduleRequest{
+			LessonID:    lesson.ID,
+			LessonDate:  datePtr(time.Date(2026, 5, 12, 0, 0, 0, 0, time.UTC)),
+			StartTime:   "10:00",
+			EndTime:     "11:00",
+			TeacherID:   8,
+			TeachingMode: "online",
+		})
+		if err == nil {
+			t.Fatalf("expected completed lesson to be blocked")
+		}
+	})
+
+	t.Run("offline lesson requires room and invalid time is rejected", func(t *testing.T) {
+		db := setupEduTestDB(t)
+		svc := NewEduScheduleService()
+		ctx := contextWithTenant(1)
+		seedEduTenantData(t, 1)
+		seedStudent(t, db, 1, 1)
+		seedBenefitProductAndStudentBenefitForSchedule(t, db, 1, 1, 1, 1, time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 6, 30, 0, 0, 0, 0, time.UTC))
+
+		lesson := &models.EduLesson{
+			LessonType:   "one_to_one",
+			LessonDate:   datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
+			StartTime:    "09:00",
+			EndTime:      "10:00",
+			StudentID:    1,
+			CourseID:     1,
+			TeacherID:    7,
+			TeachingMode: "online",
+			RequiresRoom: 0,
+			Status:       "scheduled",
+			TenantID:     1,
+		}
+		seedExistingLesson(t, db, 1, lesson)
+
+		if err := svc.RescheduleLesson(ctx, 1, &models.EduLessonRescheduleRequest{
+			LessonID:    lesson.ID,
+			LessonDate:  datePtr(time.Date(2026, 5, 12, 0, 0, 0, 0, time.UTC)),
+			StartTime:   "11:00",
+			EndTime:     "10:00",
+			TeacherID:   8,
+			TeachingMode: "online",
+		}); err == nil {
+			t.Fatalf("expected invalid time to fail")
+		}
+
+		if err := svc.RescheduleLesson(ctx, 1, &models.EduLessonRescheduleRequest{
+			LessonID:    lesson.ID,
+			LessonDate:  datePtr(time.Date(2026, 5, 12, 0, 0, 0, 0, time.UTC)),
+			StartTime:   "10:00",
+			EndTime:     "11:00",
+			TeacherID:   8,
+			TeachingMode: "offline",
+		}); err == nil {
+			t.Fatalf("expected offline lesson without room to fail")
+		}
+	})
 }
 
 func TestEduScheduleServiceRuleChangePreviewAndRegenerate(t *testing.T) {
