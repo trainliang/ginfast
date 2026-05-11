@@ -340,6 +340,12 @@ func InitRoutes(engine *gin.Engine) {
 				{
 					lessons.GET("/calendar", eduScheduleControllers.LessonCalendar)
 					lessons.GET("/list", eduScheduleControllers.LessonList)
+					lessons.PUT("/reschedule", eduScheduleControllers.RescheduleLesson)
+					lessons.PUT("/stop", eduScheduleControllers.StopLesson)
+					lessons.PUT("/cancel", eduScheduleControllers.CancelLesson)
+					lessons.PUT("/restore", eduScheduleControllers.RestoreLesson)
+					lessons.POST("/makeup", eduScheduleControllers.MakeupLesson)
+					lessons.GET("/:id/change-logs", eduScheduleControllers.LessonChangeLogs)
 				}
 
 				schedules := edu.Group("/schedules")

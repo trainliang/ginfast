@@ -75,6 +75,10 @@ func contextWithTenant(tenantID uint) context.Context {
 	return context.WithValue(context.Background(), consts.BindContextKeyName, &app.Claims{ClaimsUser: app.ClaimsUser{TenantID: tenantID}})
 }
 
+func contextWithTenantAndUser(tenantID, userID uint) context.Context {
+	return context.WithValue(context.Background(), consts.BindContextKeyName, &app.Claims{ClaimsUser: app.ClaimsUser{TenantID: tenantID, UserID: userID}})
+}
+
 func seedEduTenantData(t *testing.T, tenantID uint) {
 	t.Helper()
 	db := app.DB()

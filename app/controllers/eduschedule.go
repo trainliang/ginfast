@@ -1,6 +1,8 @@
 package controllers
 
 import (
+	"strconv"
+
 	"gin-fast/app/models"
 	"gin-fast/app/service"
 
@@ -111,6 +113,82 @@ func (ctl *EduScheduleController) LessonList(c *gin.Context) {
 		ctl.FailAndAbort(c, "获取课次列表失败", err)
 	}
 	ctl.Success(c, gin.H{"list": list, "total": total})
+}
+
+func (ctl *EduScheduleController) RescheduleLesson(c *gin.Context) {
+	var req models.EduLessonRescheduleRequest
+	if err := req.Validate(c); err != nil {
+		ctl.FailAndAbort(c, err.Error(), err)
+	}
+	if err := ctl.EduScheduleService.RescheduleLesson(c, ctl.RequireTenant(c), &req); err != nil {
+		ctl.FailAndAbort(c, err.Error(), err)
+	}
+	ctl.SuccessWithMessage(c, "课次调课成功", nil)
+}
+
+func (ctl *EduScheduleController) StopLesson(c *gin.Context) {
+	var req models.EduLessonStopRequest
+	if err := req.Validate(c); err != nil {
+		ctl.FailAndAbort(c, err.Error(), err)
+	}
+	if err := ctl.EduScheduleService.StopLesson(c, ctl.RequireTenant(c), &req); err != nil {
+		ctl.FailAndAbort(c, err.Error(), err)
+	}
+	ctl.SuccessWithMessage(c, "课次停课成功", nil)
+}
+
+func (ctl *EduScheduleController) CancelLesson(c *gin.Context) {
+	var req models.EduLessonCancelRequest
+	if err := req.Validate(c); err != nil {
+		ctl.FailAndAbort(c, err.Error(), err)
+	}
+	if err := ctl.EduScheduleService.CancelLesson(c, ctl.RequireTenant(c), &req); err != nil {
+		ctl.FailAndAbort(c, err.Error(), err)
+	}
+	ctl.SuccessWithMessage(c, "课次取消成功", nil)
+}
+
+func (ctl *EduScheduleController) RestoreLesson(c *gin.Context) {
+	var req models.EduLessonRestoreRequest
+	if err := req.Validate(c); err != nil {
+		ctl.FailAndAbort(c, err.Error(), err)
+	}
+	if err := ctl.EduScheduleService.RestoreLesson(c, ctl.RequireTenant(c), &req); err != nil {
+		ctl.FailAndAbort(c, err.Error(), err)
+	}
+	ctl.SuccessWithMessage(c, "课次恢复成功", nil)
+}
+
+func (ctl *EduScheduleController) MakeupLesson(c *gin.Context) {
+	var req models.EduLessonMakeupRequest
+	if err := req.Validate(c); err != nil {
+		ctl.FailAndAbort(c, err.Error(), err)
+	}
+	lesson, err := ctl.EduScheduleService.MakeupLesson(c, ctl.RequireTenant(c), &req)
+	if err != nil {
+		ctl.FailAndAbort(c, err.Error(), err)
+	}
+	ctl.SuccessWithMessage(c, "课次补课成功", lesson)
+}
+
+func (ctl *EduScheduleController) LessonChangeLogs(c *gin.Context) {
+	var req models.EduLessonChangeLogListRequest
+	if id := c.Param("id"); id != "" {
+		lessonID, err := strconv.ParseUint(id, 10, 64)
+		if err != nil {
+			ctl.FailAndAbort(c, "课次ID格式错误", err)
+		}
+		req.LessonID = uint(lessonID)
+	}
+	if err := req.Validate(c); err != nil {
+		ctl.FailAndAbort(c, err.Error(), err)
+	}
+	tenantID := ctl.RequireTenant(c)
+	logs, err := ctl.EduScheduleService.ListLessonChangeLogs(c, tenantID, req.LessonID)
+	if err != nil {
+		ctl.FailAndAbort(c, err.Error(), err)
+	}
+	ctl.Success(c, gin.H{"list": logs})
 }
 
 func (ctl *EduScheduleController) CheckConflicts(c *gin.Context) {

@@ -35,6 +35,16 @@ func tenantIDFromContext(ctx context.Context) uint {
 	return 0
 }
 
+func userIDFromContext(ctx context.Context) uint {
+	if ctx == nil {
+		return 0
+	}
+	if claims, ok := ctx.Value(consts.BindContextKeyName).(*app.Claims); ok && claims != nil {
+		return claims.UserID
+	}
+	return 0
+}
+
 func requireTenant(db *gorm.DB, tenantID uint) *gorm.DB {
 	if db == nil {
 		return nil

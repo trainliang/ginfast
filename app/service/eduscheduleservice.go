@@ -268,6 +268,7 @@ func (s *EduScheduleService) RescheduleLesson(ctx context.Context, tenantID uint
 	if req == nil {
 		return errors.New("请求不能为空")
 	}
+	operatorID := userIDFromContext(ctx)
 	if tenantID == 0 {
 		tenantID = tenantIDFromContext(ctx)
 	}
@@ -338,7 +339,7 @@ func (s *EduScheduleService) RescheduleLesson(ctx context.Context, tenantID uint
 			RoomID:                roomID,
 			AllowConflictOverride: req.AllowConflictOverride,
 			OverrideReason:        req.OverrideReason,
-			OperatorID:            0,
+			OperatorID:            operatorID,
 		})
 		if err != nil {
 			return err
@@ -370,6 +371,7 @@ func (s *EduScheduleService) RescheduleLesson(ctx context.Context, tenantID uint
 			BeforeData: beforeData,
 			AfterData:  afterData,
 			Reason:     strings.TrimSpace(req.OverrideReason),
+			OperatorID: operatorID,
 			OccurredAt: &models.JSONTime{Time: time.Now().UTC()},
 			TenantID:   tenantID,
 		}
@@ -403,6 +405,7 @@ func (s *EduScheduleService) MakeupLesson(ctx context.Context, tenantID uint, re
 	if req == nil {
 		return nil, errors.New("请求不能为空")
 	}
+	operatorID := userIDFromContext(ctx)
 	if tenantID == 0 {
 		tenantID = tenantIDFromContext(ctx)
 	}
@@ -556,6 +559,7 @@ func (s *EduScheduleService) MakeupLesson(ctx context.Context, tenantID uint, re
 			BeforeData: beforeData,
 			AfterData:  afterData,
 			Reason:     strings.TrimSpace(req.Reason),
+			OperatorID: operatorID,
 			OccurredAt: &models.JSONTime{Time: time.Now().UTC()},
 			TenantID:   tenantID,
 		}
@@ -567,6 +571,25 @@ func (s *EduScheduleService) MakeupLesson(ctx context.Context, tenantID uint, re
 		return nil
 	})
 	return created, err
+}
+
+func (s *EduScheduleService) ListLessonChangeLogs(ctx context.Context, tenantID, lessonID uint) ([]models.EduLessonChangeLog, error) {
+	if lessonID == 0 {
+		return nil, errors.New("课次ID不能为空")
+	}
+	if tenantID == 0 {
+		tenantID = tenantIDFromContext(ctx)
+	}
+	if tenantID == 0 {
+		return nil, errors.New("缺少租户信息")
+	}
+	var rows []models.EduLessonChangeLog
+	db := requireTenant(app.DB().WithContext(ctx).Model(&models.EduLessonChangeLog{}), tenantID).
+		Where("lesson_id = ?", lessonID)
+	if err := db.Order("occurred_at desc, id desc").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	return rows, nil
 }
 
 func (s *EduScheduleService) changeLessonStatus(ctx context.Context, tenantID, lessonID uint, targetStatus, actionType, reason string, recheckConflict bool) error {

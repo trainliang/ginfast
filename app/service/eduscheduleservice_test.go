@@ -535,7 +535,7 @@ func TestEduScheduleServiceRescheduleLesson(t *testing.T) {
 	t.Run("updates date time teacher room and logs change", func(t *testing.T) {
 		db := setupEduTestDB(t)
 		svc := NewEduScheduleService()
-		ctx := contextWithTenant(1)
+		ctx := contextWithTenantAndUser(1, 99)
 		seedEduTenantData(t, 1)
 		seedStudent(t, db, 1, 1)
 		seedBenefitProductAndStudentBenefitForSchedule(t, db, 1, 1, 1, 1, time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 6, 30, 0, 0, 0, 0, time.UTC))
@@ -592,6 +592,9 @@ func TestEduScheduleServiceRescheduleLesson(t *testing.T) {
 		}
 		if logs[0].ActionType != "reschedule" || logs[0].LessonID != lesson.ID {
 			t.Fatalf("unexpected change log: %+v", logs[0])
+		}
+		if logs[0].OperatorID != 99 {
+			t.Fatalf("expected reschedule log operator 99, got %+v", logs[0])
 		}
 		if logs[0].BeforeData == "" || logs[0].AfterData == "" {
 			t.Fatalf("expected before/after data in log: %+v", logs[0])
@@ -662,7 +665,7 @@ func TestEduScheduleServiceRescheduleLesson(t *testing.T) {
 	t.Run("admin override writes conflict override", func(t *testing.T) {
 		db := setupEduTestDB(t)
 		svc := NewEduScheduleService()
-		ctx := contextWithTenant(1)
+		ctx := contextWithTenantAndUser(1, 99)
 		seedEduTenantData(t, 1)
 		seedStudent(t, db, 1, 1)
 		seedStudent(t, db, 1, 2)
@@ -719,6 +722,9 @@ func TestEduScheduleServiceRescheduleLesson(t *testing.T) {
 		}
 		if overrides[0].Reason != "管理员确认可覆盖" || overrides[0].ConflictType == "" || overrides[0].ConflictKey == "" {
 			t.Fatalf("unexpected override row: %+v", overrides[0])
+		}
+		if overrides[0].OperatorID != 99 {
+			t.Fatalf("expected override operator 99, got %+v", overrides[0])
 		}
 	})
 
@@ -809,7 +815,7 @@ func TestEduScheduleServiceMakeupLesson(t *testing.T) {
 	t.Run("creates makeup lesson from source lesson and writes traceable change log", func(t *testing.T) {
 		db := setupEduTestDB(t)
 		svc := NewEduScheduleService()
-		ctx := contextWithTenant(1)
+		ctx := contextWithTenantAndUser(1, 99)
 		seedEduTenantData(t, 1)
 		seedStudent(t, db, 1, 1)
 		seedBenefitProductAndStudentBenefitForSchedule(t, db, 1, 1, 1, 1, time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 6, 30, 0, 0, 0, 0, time.UTC))
@@ -866,6 +872,9 @@ func TestEduScheduleServiceMakeupLesson(t *testing.T) {
 		}
 		if logs[0].ActionType != "makeup" || logs[0].LessonID != lesson.ID {
 			t.Fatalf("unexpected change log: %+v", logs[0])
+		}
+		if logs[0].OperatorID != 99 {
+			t.Fatalf("expected makeup log operator 99, got %+v", logs[0])
 		}
 		if !strings.Contains(logs[0].BeforeData, fmt.Sprintf("source_lesson_id=%d", sourceLesson.ID)) || !strings.Contains(logs[0].AfterData, fmt.Sprintf("lesson_id=%d", lesson.ID)) {
 			t.Fatalf("expected log to trace source and new lesson, got %+v", logs[0])
