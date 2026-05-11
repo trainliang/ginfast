@@ -805,6 +805,210 @@ func TestEduScheduleServiceRescheduleLesson(t *testing.T) {
 	})
 }
 
+func TestEduScheduleServiceStopCancelRestoreLesson(t *testing.T) {
+	t.Run("stop lesson updates status and writes change log", func(t *testing.T) {
+		db := setupEduTestDB(t)
+		svc := NewEduScheduleService()
+		ctx := contextWithTenant(1)
+		seedEduTenantData(t, 1)
+		lesson := &models.EduLesson{
+			LessonType:   "one_to_one",
+			LessonDate:   datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
+			StartTime:    "09:00",
+			EndTime:      "10:00",
+			StudentID:    1,
+			CourseID:     1,
+			TeacherID:    1,
+			TeachingMode: "online",
+			RequiresRoom: 0,
+			Status:       "scheduled",
+			TenantID:     1,
+		}
+		seedExistingLesson(t, db, 1, lesson)
+
+		if err := svc.StopLesson(ctx, 1, &models.EduLessonStopRequest{LessonID: lesson.ID, Reason: "临时停课"}); err != nil {
+			t.Fatalf("stop lesson: %v", err)
+		}
+
+		var updated models.EduLesson
+		if err := db.First(&updated, lesson.ID).Error; err != nil {
+			t.Fatalf("load lesson: %v", err)
+		}
+		if updated.Status != "stopped" {
+			t.Fatalf("expected stopped status, got %+v", updated)
+		}
+		var logs []models.EduLessonChangeLog
+		if err := db.Order("id asc").Find(&logs).Error; err != nil {
+			t.Fatalf("load change logs: %v", err)
+		}
+		if len(logs) != 1 {
+			t.Fatalf("expected 1 change log, got %d", len(logs))
+		}
+		if logs[0].ActionType != "stop" || logs[0].LessonID != lesson.ID || logs[0].Reason != "临时停课" {
+			t.Fatalf("unexpected stop log: %+v", logs[0])
+		}
+	})
+
+	t.Run("cancel lesson updates status and writes change log", func(t *testing.T) {
+		db := setupEduTestDB(t)
+		svc := NewEduScheduleService()
+		ctx := contextWithTenant(1)
+		seedEduTenantData(t, 1)
+		lesson := &models.EduLesson{
+			LessonType:   "one_to_one",
+			LessonDate:   datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
+			StartTime:    "09:00",
+			EndTime:      "10:00",
+			StudentID:    1,
+			CourseID:     1,
+			TeacherID:    1,
+			TeachingMode: "online",
+			RequiresRoom: 0,
+			Status:       "scheduled",
+			TenantID:     1,
+		}
+		seedExistingLesson(t, db, 1, lesson)
+
+		if err := svc.CancelLesson(ctx, 1, &models.EduLessonCancelRequest{LessonID: lesson.ID, Reason: "客户取消"}); err != nil {
+			t.Fatalf("cancel lesson: %v", err)
+		}
+
+		var updated models.EduLesson
+		if err := db.First(&updated, lesson.ID).Error; err != nil {
+			t.Fatalf("load lesson: %v", err)
+		}
+		if updated.Status != "canceled" {
+			t.Fatalf("expected canceled status, got %+v", updated)
+		}
+		var logs []models.EduLessonChangeLog
+		if err := db.Order("id asc").Find(&logs).Error; err != nil {
+			t.Fatalf("load change logs: %v", err)
+		}
+		if len(logs) != 1 {
+			t.Fatalf("expected 1 change log, got %d", len(logs))
+		}
+		if logs[0].ActionType != "cancel" || logs[0].LessonID != lesson.ID || logs[0].Reason != "客户取消" {
+			t.Fatalf("unexpected cancel log: %+v", logs[0])
+		}
+	})
+
+	t.Run("restore lesson returns to scheduled and rechecks conflict and eligibility", func(t *testing.T) {
+		db := setupEduTestDB(t)
+		svc := NewEduScheduleService()
+		ctx := contextWithTenant(1)
+		seedEduTenantData(t, 1)
+		seedStudent(t, db, 1, 1)
+		seedStudent(t, db, 1, 2)
+		seedBenefitProductAndStudentBenefitForSchedule(t, db, 1, 1, 1, 1, time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 6, 30, 0, 0, 0, 0, time.UTC))
+		seedBenefitProductAndStudentBenefitForSchedule(t, db, 1, 2, 2, 1, time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 6, 30, 0, 0, 0, 0, time.UTC))
+
+		lesson := &models.EduLesson{
+			LessonType:   "one_to_one",
+			LessonDate:   datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
+			StartTime:    "09:00",
+			EndTime:      "10:00",
+			StudentID:    1,
+			CourseID:     1,
+			TeacherID:    1,
+			TeachingMode: "online",
+			RequiresRoom: 0,
+			Status:       "stopped",
+			TenantID:     1,
+		}
+		seedExistingLesson(t, db, 1, lesson)
+		seedExistingLesson(t, db, 1, &models.EduLesson{
+			LessonType:   "one_to_one",
+			LessonDate:   datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
+			StartTime:    "09:30",
+			EndTime:      "10:30",
+			StudentID:    2,
+			CourseID:     1,
+			TeacherID:    1,
+			TeachingMode: "online",
+			RequiresRoom: 0,
+			Status:       "scheduled",
+			TenantID:     1,
+		})
+
+		if err := svc.RestoreLesson(ctx, 1, &models.EduLessonRestoreRequest{LessonID: lesson.ID, Reason: "恢复排课"}); err == nil {
+			t.Fatalf("expected conflict to block normal restore")
+		}
+
+		var updated models.EduLesson
+		if err := db.First(&updated, lesson.ID).Error; err != nil {
+			t.Fatalf("load lesson: %v", err)
+		}
+		if updated.Status != "stopped" {
+			t.Fatalf("restore should rollback on conflict, got %+v", updated)
+		}
+	})
+
+	t.Run("restore lesson rejects when eligibility is invalid", func(t *testing.T) {
+		db := setupEduTestDB(t)
+		svc := NewEduScheduleService()
+		ctx := contextWithTenant(1)
+		seedEduTenantData(t, 1)
+		seedStudent(t, db, 1, 1)
+
+		lesson := &models.EduLesson{
+			LessonType:   "one_to_one",
+			LessonDate:   datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
+			StartTime:    "09:00",
+			EndTime:      "10:00",
+			StudentID:    1,
+			CourseID:     1,
+			TeacherID:    1,
+			TeachingMode: "online",
+			RequiresRoom: 0,
+			Status:       "canceled",
+			TenantID:     1,
+		}
+		seedExistingLesson(t, db, 1, lesson)
+
+		if err := svc.RestoreLesson(ctx, 1, &models.EduLessonRestoreRequest{LessonID: lesson.ID, Reason: "恢复排课"}); err == nil {
+			t.Fatalf("expected restore to fail when eligibility is invalid")
+		}
+		var updated models.EduLesson
+		if err := db.First(&updated, lesson.ID).Error; err != nil {
+			t.Fatalf("load lesson: %v", err)
+		}
+		if updated.Status != "canceled" {
+			t.Fatalf("restore should rollback on eligibility failure, got %+v", updated)
+		}
+	})
+
+	t.Run("completed lesson is blocked for stop cancel restore", func(t *testing.T) {
+		db := setupEduTestDB(t)
+		svc := NewEduScheduleService()
+		ctx := contextWithTenant(1)
+		seedEduTenantData(t, 1)
+		lesson := &models.EduLesson{
+			LessonType:   "one_to_one",
+			LessonDate:   datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
+			StartTime:    "09:00",
+			EndTime:      "10:00",
+			StudentID:    1,
+			CourseID:     1,
+			TeacherID:    1,
+			TeachingMode: "online",
+			RequiresRoom: 0,
+			Status:       "completed",
+			TenantID:     1,
+		}
+		seedExistingLesson(t, db, 1, lesson)
+
+		if err := svc.StopLesson(ctx, 1, &models.EduLessonStopRequest{LessonID: lesson.ID, Reason: "临时停课"}); err == nil {
+			t.Fatalf("expected completed stop to fail")
+		}
+		if err := svc.CancelLesson(ctx, 1, &models.EduLessonCancelRequest{LessonID: lesson.ID, Reason: "客户取消"}); err == nil {
+			t.Fatalf("expected completed cancel to fail")
+		}
+		if err := svc.RestoreLesson(ctx, 1, &models.EduLessonRestoreRequest{LessonID: lesson.ID, Reason: "恢复"}); err == nil {
+			t.Fatalf("expected completed restore to fail")
+		}
+	})
+}
+
 func TestEduScheduleServiceRuleChangePreviewAndRegenerate(t *testing.T) {
 	db := setupEduTestDB(t)
 	svc := NewEduScheduleService()

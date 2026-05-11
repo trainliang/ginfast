@@ -387,6 +387,111 @@ func (s *EduScheduleService) RescheduleLesson(ctx context.Context, tenantID uint
 	return err
 }
 
+func (s *EduScheduleService) StopLesson(ctx context.Context, tenantID uint, req *models.EduLessonStopRequest) error {
+	return s.changeLessonStatus(ctx, tenantID, req.LessonID, "stopped", "stop", req.Reason, false)
+}
+
+func (s *EduScheduleService) CancelLesson(ctx context.Context, tenantID uint, req *models.EduLessonCancelRequest) error {
+	return s.changeLessonStatus(ctx, tenantID, req.LessonID, "canceled", "cancel", req.Reason, false)
+}
+
+func (s *EduScheduleService) RestoreLesson(ctx context.Context, tenantID uint, req *models.EduLessonRestoreRequest) error {
+	return s.changeLessonStatus(ctx, tenantID, req.LessonID, "scheduled", "restore", req.Reason, true)
+}
+
+func (s *EduScheduleService) changeLessonStatus(ctx context.Context, tenantID, lessonID uint, targetStatus, actionType, reason string, recheckConflict bool) error {
+	if lessonID == 0 {
+		return errors.New("课次ID不能为空")
+	}
+	if tenantID == 0 {
+		tenantID = tenantIDFromContext(ctx)
+	}
+	if tenantID == 0 {
+		return errors.New("缺少租户信息")
+	}
+	if err := ensureTenantID(tenantID); err != nil {
+		return err
+	}
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		return errors.New("原因不能为空")
+	}
+
+	return app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var lesson models.EduLesson
+		if err := requireTenant(tx.Model(&models.EduLesson{}), tenantID).Where("id = ?", lessonID).First(&lesson).Error; err != nil {
+			return err
+		}
+		if strings.EqualFold(strings.TrimSpace(lesson.Status), "completed") {
+			return errors.New("已完成课次禁止变更状态")
+		}
+		if !recheckConflict && strings.EqualFold(strings.TrimSpace(lesson.Status), targetStatus) {
+			return nil
+		}
+		if recheckConflict {
+			if strings.TrimSpace(lesson.Status) != "stopped" && strings.TrimSpace(lesson.Status) != "canceled" {
+				return errors.New("当前课次状态不允许恢复")
+			}
+			conflictResult, err := s.checkConflictsWithDB(ctx, tx, &models.EduScheduleConflictCheckRequest{
+				LessonID:     lesson.ID,
+				RuleID:       lesson.RuleID,
+				LessonDate:   lesson.LessonDate,
+				StartTime:    lesson.StartTime,
+				EndTime:      lesson.EndTime,
+				ClassID:      lesson.ClassID,
+				StudentID:    lesson.StudentID,
+				CourseID:     lesson.CourseID,
+				TeacherID:    lesson.TeacherID,
+				TeachingMode: lesson.TeachingMode,
+				RequiresRoom: lesson.RequiresRoom,
+				RoomID:       lesson.RoomID,
+			})
+			if err != nil {
+				return err
+			}
+			if conflictResult != nil && conflictResult.HasConflict {
+				return errors.New("存在排课冲突")
+			}
+		} else {
+			if strings.EqualFold(strings.TrimSpace(lesson.Status), "stopped") || strings.EqualFold(strings.TrimSpace(lesson.Status), "canceled") {
+				// 允许重复停课/取消返回成功，保持幂等性。
+			} else if strings.TrimSpace(lesson.Status) != "scheduled" {
+				return errors.New("当前课次状态不允许变更")
+			}
+		}
+
+		beforeData := fmt.Sprintf("lesson_date=%s,start_time=%s,end_time=%s,teacher_id=%d,room_id=%d,teaching_mode=%s,requires_room=%d,status=%s,is_manual_adjusted=%d",
+			lessonDateString(lesson.LessonDate), lesson.StartTime, lesson.EndTime, lesson.TeacherID, lesson.RoomID, lesson.TeachingMode, lesson.RequiresRoom, lesson.Status, lesson.IsManualAdjusted)
+		lesson.Status = targetStatus
+		if err := tx.Save(&lesson).Error; err != nil {
+			return err
+		}
+		afterData := fmt.Sprintf("lesson_date=%s,start_time=%s,end_time=%s,teacher_id=%d,room_id=%d,teaching_mode=%s,requires_room=%d,status=%s,is_manual_adjusted=%d",
+			lessonDateString(lesson.LessonDate), lesson.StartTime, lesson.EndTime, lesson.TeacherID, lesson.RoomID, lesson.TeachingMode, lesson.RequiresRoom, lesson.Status, lesson.IsManualAdjusted)
+		changeLog := &models.EduLessonChangeLog{
+			LessonID:   lesson.ID,
+			RuleID:     lesson.RuleID,
+			ActionType: actionType,
+			BeforeData: beforeData,
+			AfterData:  afterData,
+			Reason:     reason,
+			OccurredAt: &models.JSONTime{Time: time.Now().UTC()},
+			TenantID:   tenantID,
+		}
+		if err := tx.Create(changeLog).Error; err != nil {
+			return err
+		}
+		if recheckConflict {
+			if lesson.StudentID != 0 {
+				if err := s.recheckLessonEligibilityTx(tx, ctx, &lesson); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
+}
+
 func (s *EduScheduleService) generateLessonsForRuleTx(ctx context.Context, rule *models.EduScheduleRule, operatorID uint) ([]models.EduLesson, error) {
 	return s.generateLessonsForRuleTxWithDB(ctx, app.DB().WithContext(ctx), rule, operatorID)
 }
@@ -740,12 +845,25 @@ func (s *EduScheduleService) recheckLessonEligibilityTx(tx *gorm.DB, ctx context
 		return err
 	}
 	if len(rows) == 0 {
+		if lesson.StudentID == 0 {
+			return nil
+		}
+		check, err := checkEligibilityTx(tx, lesson.LessonDate, lesson.TenantID, lesson.StudentID, lesson.CourseID, lesson.ClassID, lesson.TeacherID)
+		if err != nil {
+			return err
+		}
+		if check == nil || !check.Eligible {
+			return errors.New("学生权益不足")
+		}
 		return nil
 	}
 	for _, row := range rows {
 		check, err := checkEligibilityTx(tx, lesson.LessonDate, lesson.TenantID, row.StudentID, lesson.CourseID, lesson.ClassID, lesson.TeacherID)
 		if err != nil {
 			return err
+		}
+		if check == nil || !check.Eligible {
+			return errors.New("学生权益不足")
 		}
 		status := check.Status
 		if status == "" {
