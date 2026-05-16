@@ -1,6 +1,7 @@
 package gormhelper
 
 import (
+	"errors"
 	"gin-fast/app/global/app"
 	"gin-fast/app/global/myerrors"
 	"reflect"
@@ -31,9 +32,18 @@ func CreateBeforeHook(gormDB *gorm.DB) {
 					// 检查是否有TenantID字段，如果有则自动设置
 					if b, _ := structHasSpecialField("TenantID", row); b {
 						// 从上下文中获取租户ID
-						if tenantID := GetTenantIDFromContext(gormDB.Statement.Context); tenantID > 0 {
-							field := destValueOf.Index(i).FieldByName("TenantID")
-							if field.IsValid() && field.CanSet() && field.Kind() == reflect.Uint && field.Uint() == 0 {
+						tenantID := GetTenantIDFromContext(gormDB.Statement.Context)
+						if tenantID == 0 {
+							_ = gormDB.AddError(errors.New("当前处于平台态，禁止创建租户业务数据"))
+							return
+						}
+						field := destValueOf.Index(i).FieldByName("TenantID")
+						if field.IsValid() && field.CanSet() && field.Kind() == reflect.Uint {
+							if current := field.Uint(); current != 0 && current != uint64(tenantID) {
+								_ = gormDB.AddError(errors.New("租户数据归属与当前租户不一致"))
+								return
+							}
+							if field.Uint() == 0 {
 								field.SetUint(uint64(tenantID))
 							}
 						}
@@ -52,9 +62,20 @@ func CreateBeforeHook(gormDB *gorm.DB) {
 					// 检查是否有TenantID字段，如果有则自动设置
 					if b, column := structHasSpecialField("tenant_id", row); b {
 						// 从上下文中获取租户ID
-						if tenantID := GetTenantIDFromContext(gormDB.Statement.Context); tenantID > 0 {
-							row.SetMapIndex(reflect.ValueOf(column), reflect.ValueOf(tenantID))
+						tenantID := GetTenantIDFromContext(gormDB.Statement.Context)
+						if tenantID == 0 {
+							_ = gormDB.AddError(errors.New("当前处于平台态，禁止创建租户业务数据"))
+							return
 						}
+						current := row.MapIndex(reflect.ValueOf(column))
+						if current.IsValid() && !current.IsZero() {
+							currentTenantID := current.Convert(reflect.TypeOf(uint(0))).Uint()
+							if currentTenantID != uint64(tenantID) {
+								_ = gormDB.AddError(errors.New("租户数据归属与当前租户不一致"))
+								return
+							}
+						}
+						row.SetMapIndex(reflect.ValueOf(column), reflect.ValueOf(tenantID))
 					}
 					// 检查是否有CreatedBy字段，如果有则自动设置
 					if b, column := structHasSpecialField("created_by", row); b {
@@ -69,9 +90,17 @@ func CreateBeforeHook(gormDB *gorm.DB) {
 			// 检查是否有TenantID字段，如果有则自动设置
 			if b, column := structHasSpecialField("TenantID", gormDB.Statement.Dest); b {
 				// 从上下文中获取租户ID
-				if tenantID := GetTenantIDFromContext(gormDB.Statement.Context); tenantID > 0 {
-					// 仅在未显式赋值时注入
-					if f := destValueOf.FieldByName("TenantID"); f.IsValid() && f.Kind() == reflect.Uint && f.Uint() == 0 {
+				tenantID := GetTenantIDFromContext(gormDB.Statement.Context)
+				if tenantID == 0 {
+					_ = gormDB.AddError(errors.New("当前处于平台态，禁止创建租户业务数据"))
+					return
+				}
+				if f := destValueOf.FieldByName("TenantID"); f.IsValid() && f.Kind() == reflect.Uint {
+					if current := f.Uint(); current != 0 && current != uint64(tenantID) {
+						_ = gormDB.AddError(errors.New("租户数据归属与当前租户不一致"))
+						return
+					}
+					if f.Uint() == 0 {
 						gormDB.Statement.SetColumn(column, tenantID)
 					}
 				}
@@ -90,9 +119,20 @@ func CreateBeforeHook(gormDB *gorm.DB) {
 			// 检查是否有TenantID字段，如果有则自动设置
 			if b, column := structHasSpecialField("tenant_id", gormDB.Statement.Dest); b {
 				// 从上下文中获取租户ID
-				if tenantID := GetTenantIDFromContext(gormDB.Statement.Context); tenantID > 0 {
-					destValueOf.SetMapIndex(reflect.ValueOf(column), reflect.ValueOf(tenantID))
+				tenantID := GetTenantIDFromContext(gormDB.Statement.Context)
+				if tenantID == 0 {
+					_ = gormDB.AddError(errors.New("当前处于平台态，禁止创建租户业务数据"))
+					return
 				}
+				current := destValueOf.MapIndex(reflect.ValueOf(column))
+				if current.IsValid() && !current.IsZero() {
+					currentTenantID := current.Convert(reflect.TypeOf(uint(0))).Uint()
+					if currentTenantID != uint64(tenantID) {
+						_ = gormDB.AddError(errors.New("租户数据归属与当前租户不一致"))
+						return
+					}
+				}
+				destValueOf.SetMapIndex(reflect.ValueOf(column), reflect.ValueOf(tenantID))
 			}
 			// 检查是否有CreatedBy字段，如果有则自动设置
 			if b, column := structHasSpecialField("created_by", gormDB.Statement.Dest); b {

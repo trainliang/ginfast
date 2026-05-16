@@ -58,15 +58,37 @@ func TestCreateBeforeHook_BatchCreateSetsTenantID(t *testing.T) {
 	}
 }
 
-func TestCreateBeforeHook_SingleCreateDoesNotOverrideTenantID(t *testing.T) {
+func TestCreateBeforeHook_SingleCreateRejectsCrossTenantID(t *testing.T) {
 	db := setupHookTestDB(t)
 	ctx := contextWithTenant(123)
 
 	row := &hookTenantRecord{Name: "A", TenantID: 999}
-	if err := db.WithContext(ctx).Create(row).Error; err != nil {
-		t.Fatalf("create: %v", err)
+	err := db.WithContext(ctx).Create(row).Error
+	if err == nil {
+		t.Fatalf("expected cross tenant create to fail")
 	}
-	if row.TenantID != 999 {
-		t.Fatalf("expected TenantID preserved, got %d", row.TenantID)
+}
+
+func TestCreateBeforeHook_SingleCreateAllowsMatchingTenantID(t *testing.T) {
+	db := setupHookTestDB(t)
+	ctx := contextWithTenant(123)
+
+	row := &hookTenantRecord{Name: "A", TenantID: 123}
+	if err := db.WithContext(ctx).Create(row).Error; err != nil {
+		t.Fatalf("create with matching tenant: %v", err)
+	}
+	if row.TenantID != 123 {
+		t.Fatalf("expected TenantID=123, got %d", row.TenantID)
+	}
+}
+
+func TestCreateBeforeHook_SingleCreateRejectsPlatformMode(t *testing.T) {
+	db := setupHookTestDB(t)
+	ctx := contextWithTenant(0)
+
+	row := &hookTenantRecord{Name: "A"}
+	err := db.WithContext(ctx).Create(row).Error
+	if err == nil {
+		t.Fatalf("expected platform mode create to fail")
 	}
 }

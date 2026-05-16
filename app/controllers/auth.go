@@ -11,6 +11,7 @@ import (
 	"gin-fast/app/utils/captchahelper"
 	"gin-fast/app/utils/common"
 	"gin-fast/app/utils/passwordhelper"
+	"gin-fast/app/utils/tenanthelper"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -183,19 +184,31 @@ func (ac *AuthController) Login(c *gin.Context) {
 
 	// 生成token
 	user.Password = ""
-	token, err := app.TokenService.GenerateTokenWithCache(&app.ClaimsUser{
-		UserID:     user.ID,
-		Username:   user.Username,
-		TenantID:   tenantID,
-		TenantCode: tenantCode,
-	})
+	isPlatformAdmin := user.TenantID == 0
+	mode := tenanthelper.ModeTenant
+	if isPlatformAdmin && tenantID > 0 {
+		mode = tenanthelper.ModeImpersonation
+	} else if tenantID == 0 {
+		mode = tenanthelper.ModePlatform
+	}
+	tokenUser := &app.ClaimsUser{
+		UserID:          user.ID,
+		Username:        user.Username,
+		TenantID:        tenantID,
+		TenantCode:      tenantCode,
+		Mode:            mode,
+		AuthSource:      "password",
+		IsPlatformAdmin: isPlatformAdmin,
+		ActorUserID:     user.ID,
+	}
+	token, err := app.TokenService.GenerateTokenWithCache(tokenUser)
 
 	if err != nil {
 		ac.FailAndAbort(c, "生成token失败", err)
 	}
 
 	// 生成refresh token
-	refreshToken, err := app.TokenService.GenerateRefreshToken(user.ID)
+	refreshToken, err := app.TokenService.GenerateRefreshTokenForUser(tokenUser)
 	if err != nil {
 		ac.FailAndAbort(c, "生成refresh token失败", err)
 	}
@@ -239,24 +252,22 @@ func (ac *AuthController) RefreshToken(c *gin.Context) {
 		refreshToken = req.RefreshToken
 	}
 
-	// 解析refreshToken获取用户ID
-	claims, err := app.TokenService.ParseRefreshToken(refreshToken)
+	// 解析refreshToken获取用户和租户上下文
+	refreshClaims, err := app.TokenService.ParseRefreshToken(refreshToken)
 	if err != nil {
 		ac.FailAndAbort(c, "无效的refreshToken", err)
 	}
 
 	// 从数据库中获取用户信息
 	var user models.User
-	if err = app.DB().WithContext(c).First(&user, claims.UserID).Error; err != nil {
+	if err = app.DB().WithContext(c).First(&user, refreshClaims.UserID).Error; err != nil {
 		ac.FailAndAbort(c, "用户不存在", err)
 	}
 
 	// 使用refresh token刷新access token
 	user.Password = ""
-	newAccessToken, err := app.TokenService.RefreshAccessTokenWithCache(refreshToken, &app.ClaimsUser{
-		UserID:   user.ID,
-		Username: user.Username,
-	})
+	nextClaimsUser := buildRefreshClaimsUser(refreshClaims, user.Username)
+	newAccessToken, err := app.TokenService.RefreshAccessTokenWithCache(refreshToken, &nextClaimsUser)
 	if err != nil {
 		ac.FailAndAbort(c, "refresh token刷新失败", err)
 	}
@@ -283,6 +294,18 @@ func (ac *AuthController) RefreshToken(c *gin.Context) {
 		"refreshToken":        newRefreshToken,
 		"refreshTokenExpires": newRefreshClaims.ExpiresAt.Unix(),
 	})
+}
+
+func buildRefreshClaimsUser(refreshClaims *app.RefreshTokenClaims, username string) app.ClaimsUser {
+	if refreshClaims == nil {
+		return app.ClaimsUser{Username: username}
+	}
+	nextClaimsUser := refreshClaims.ClaimsUser
+	nextClaimsUser.Username = username
+	if nextClaimsUser.ActorUserID == 0 {
+		nextClaimsUser.ActorUserID = nextClaimsUser.UserID
+	}
+	return nextClaimsUser
 }
 
 // Logout 用户登出

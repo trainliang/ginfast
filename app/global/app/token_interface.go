@@ -29,6 +29,9 @@ type TokenServiceInterface interface {
 	// GenerateRefreshToken 生成Refresh Token
 	GenerateRefreshToken(userID uint) (string, error)
 
+	// GenerateRefreshTokenForUser 生成包含租户上下文的Refresh Token
+	GenerateRefreshTokenForUser(user *ClaimsUser) (string, error)
+
 	// ParseRefreshToken 解析Refresh Token
 	ParseRefreshToken(tokenString string) (*RefreshTokenClaims, error)
 
@@ -47,10 +50,15 @@ type TokenServiceInterface interface {
 
 // ClaimsUser 用户声明信息
 type ClaimsUser struct {
-	UserID     uint   `json:"userId"`               // 用户ID
-	Username   string `json:"username"`             // 用户名
-	TenantID   uint   `json:"tenantId,omitempty"`   // 租户ID
-	TenantCode string `json:"tenantCode,omitempty"` // 租户编码
+	UserID           uint   `json:"userId"`                     // 用户ID
+	Username         string `json:"username"`                   // 用户名
+	TenantID         uint   `json:"tenantId,omitempty"`         // 租户ID
+	TenantCode       string `json:"tenantCode,omitempty"`       // 租户编码
+	Mode             string `json:"mode,omitempty"`             // 租户上下文模式
+	AuthSource       string `json:"authSource,omitempty"`       // 认证来源
+	IsPlatformAdmin  bool   `json:"isPlatformAdmin,omitempty"`  // 是否平台管理员
+	ActorUserID      uint   `json:"actorUserId,omitempty"`      // 真实操作者ID
+	ExternalClientID string `json:"externalClientId,omitempty"` // 外部客户端ID
 }
 
 // Claims JWT声明结构
@@ -61,7 +69,7 @@ type Claims struct {
 
 // RefreshTokenClaims Refresh Token声明结构
 type RefreshTokenClaims struct {
-	UserID uint `json:"userId"`
+	ClaimsUser
 	jwt.RegisteredClaims
 }
 

@@ -136,13 +136,26 @@ func (s *TokenService) getTokenKeyWithCache(userID uint, tokenString string) str
 /*****************************************refreshToken管理****************************************************/
 // GenerateRefreshToken 生成Refresh Token
 func (s *TokenService) GenerateRefreshToken(userID uint) (string, error) {
+	return s.GenerateRefreshTokenForUser(&app.ClaimsUser{UserID: userID})
+}
+
+// GenerateRefreshTokenForUser 生成包含用户租户上下文的Refresh Token
+func (s *TokenService) GenerateRefreshTokenForUser(user *app.ClaimsUser) (string, error) {
+	if user == nil {
+		return "", errors.New("refresh token user is nil")
+	}
+	now := time.Now()
 	expirationTime := time.Now().Add(s.RefreshExpire * time.Second)
+	claimsUser := *user
+	if claimsUser.ActorUserID == 0 {
+		claimsUser.ActorUserID = claimsUser.UserID
+	}
 	claims := &app.RefreshTokenClaims{
-		UserID: userID,
+		ClaimsUser: claimsUser,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			NotBefore: jwt.NewNumericDate(time.Now()),
+			IssuedAt:  jwt.NewNumericDate(now),
+			NotBefore: jwt.NewNumericDate(now),
 		},
 	}
 
@@ -154,10 +167,10 @@ func (s *TokenService) GenerateRefreshToken(userID uint) (string, error) {
 
 	// 存储refresh token到Redis
 	refreshTokenInfo := &app.RefreshTokenInfo{
-		UserID:    userID,
+		UserID:    claims.UserID,
 		Token:     tokenString,
 		ExpiresAt: expirationTime,
-		CreatedAt: time.Now(),
+		CreatedAt: now,
 	}
 
 	err = s.storeRefreshToken(refreshTokenInfo)
@@ -252,7 +265,7 @@ func (s *TokenService) RotateRefreshToken(oldRefreshToken string) (string, error
 	// 4. 生成新的refresh token，使用剩余的有效时间
 	expirationTime := now.Add(remainingDuration)
 	newClaims := &app.RefreshTokenClaims{
-		UserID: claims.UserID,
+		ClaimsUser: claims.ClaimsUser,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expirationTime),
 			IssuedAt:  jwt.NewNumericDate(now),

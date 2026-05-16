@@ -771,19 +771,33 @@ func (uc *UserController) SwitchTenant(c *gin.Context) {
 
 	// 生成新的token
 	user.Password = ""
-	newToken, err := app.TokenService.GenerateTokenWithCache(&app.ClaimsUser{
-		UserID:     user.ID,
-		Username:   user.Username,
-		TenantID:   tenantID,
-		TenantCode: tenantCode,
-	})
+	newClaimsUser := &app.ClaimsUser{
+		UserID:          user.ID,
+		Username:        user.Username,
+		TenantID:        tenantID,
+		TenantCode:      tenantCode,
+		AuthSource:      claims.AuthSource,
+		ActorUserID:     claims.UserID,
+		IsPlatformAdmin: claims.IsPlatformAdmin,
+	}
+	if newClaimsUser.AuthSource == "" {
+		newClaimsUser.AuthSource = "password"
+	}
+	if claims.IsPlatformAdmin && claims.TenantID == 0 && tenantID > 0 {
+		newClaimsUser.Mode = tenanthelper.ModeImpersonation
+	} else if tenantID == 0 {
+		newClaimsUser.Mode = tenanthelper.ModePlatform
+	} else {
+		newClaimsUser.Mode = tenanthelper.ModeTenant
+	}
+	newToken, err := app.TokenService.GenerateTokenWithCache(newClaimsUser)
 	if err != nil {
 		uc.FailAndAbort(c, "生成新token失败", err)
 		return
 	}
 
 	// 生成新的refresh token
-	newRefreshToken, err := app.TokenService.GenerateRefreshToken(user.ID)
+	newRefreshToken, err := app.TokenService.GenerateRefreshTokenForUser(newClaimsUser)
 	if err != nil {
 		uc.FailAndAbort(c, "生成新refresh token失败", err)
 		return

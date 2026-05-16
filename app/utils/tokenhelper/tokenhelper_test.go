@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 // MockCacheInterf 模拟缓存接口
@@ -61,6 +62,76 @@ func (m *MockCacheInterf) Close() error {
 
 func (m *MockCacheInterf) GetAll(ctx context.Context) ([]app.CacheItem, error) {
 	return nil, nil
+}
+
+func TestGenerateTokenPreservesTenantContextClaims(t *testing.T) {
+	mockCache := NewMockCacheInterf()
+	tokenService := &TokenService{
+		Ctx:            context.Background(),
+		RedisHelper:    mockCache,
+		JWTSecret:      "test_secret",
+		TokenExpire:    3600,
+		RefreshExpire:  7200,
+		CacheKeyPrefix: "test:",
+		IsCache:        false,
+	}
+
+	token, err := tokenService.GenerateToken(&app.ClaimsUser{
+		UserID:           7,
+		Username:         "admin",
+		TenantID:         23,
+		TenantCode:       "tenant-23",
+		Mode:             "impersonation",
+		AuthSource:       "password",
+		IsPlatformAdmin:  true,
+		ActorUserID:      7,
+		ExternalClientID: "",
+	})
+	require.NoError(t, err)
+
+	claims, err := tokenService.ParseToken(token)
+	require.NoError(t, err)
+	assert.Equal(t, uint(23), claims.TenantID)
+	assert.Equal(t, "tenant-23", claims.TenantCode)
+	assert.Equal(t, "impersonation", claims.Mode)
+	assert.Equal(t, "password", claims.AuthSource)
+	assert.True(t, claims.IsPlatformAdmin)
+	assert.Equal(t, uint(7), claims.ActorUserID)
+}
+
+func TestGenerateRefreshTokenPreservesTenantContext(t *testing.T) {
+	mockCache := NewMockCacheInterf()
+	tokenService := &TokenService{
+		Ctx:            context.Background(),
+		RedisHelper:    mockCache,
+		JWTSecret:      "test_secret",
+		TokenExpire:    3600,
+		RefreshExpire:  7200,
+		CacheKeyPrefix: "test:",
+		IsCache:        false,
+	}
+
+	refreshToken, err := tokenService.GenerateRefreshTokenForUser(&app.ClaimsUser{
+		UserID:          1,
+		Username:        "admin",
+		TenantID:        8,
+		TenantCode:      "tenant8",
+		Mode:            "impersonation",
+		AuthSource:      "password",
+		IsPlatformAdmin: true,
+		ActorUserID:     1,
+	})
+	require.NoError(t, err)
+
+	claims, err := tokenService.ParseRefreshToken(refreshToken)
+	require.NoError(t, err)
+	assert.Equal(t, uint(1), claims.UserID)
+	assert.Equal(t, uint(8), claims.TenantID)
+	assert.Equal(t, "tenant8", claims.TenantCode)
+	assert.Equal(t, "impersonation", claims.Mode)
+	assert.Equal(t, "password", claims.AuthSource)
+	assert.True(t, claims.IsPlatformAdmin)
+	assert.Equal(t, uint(1), claims.ActorUserID)
 }
 
 func TestRotateRefreshToken(t *testing.T) {
