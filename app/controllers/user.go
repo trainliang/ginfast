@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -185,6 +186,9 @@ func (uc *UserController) GetUserByID(c *gin.Context) {
 	}
 
 	// 获取用户信息
+	if err := ensureUserInCurrentTenant(c, uint(id)); err != nil {
+		uc.FailAndAbort(c, err.Error(), err)
+	}
 	user, err := uc.UserService.GetUserProfile(c, uint(id))
 	if err != nil {
 		uc.FailAndAbort(c, "获取用户信息失败", err)
@@ -210,9 +214,14 @@ func (uc *UserController) Add(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		uc.FailAndAbort(c, err.Error(), err)
 	}
+	tenantCtx, err := tenanthelper.FromGinContext(c)
+	if err != nil || tenantCtx.EffectiveTenantID == 0 {
+		uc.FailAndAbort(c, "当前处于平台态，禁止维护租户用户", err)
+	}
+	tenantID := tenantCtx.EffectiveTenantID
 	// 检查用户名是否已存在
 	user := models.NewUser()
-	err := user.GetUserByUsername(c, req.UserName)
+	err = user.GetUserByUsername(c, req.UserName)
 	if err != nil {
 		uc.FailAndAbort(c, err.Error(), err)
 	}
@@ -262,6 +271,7 @@ func (uc *UserController) Add(c *gin.Context) {
 		user.DeptID = req.DeptId
 		user.Status = req.Status
 		user.Description = req.Description
+		user.TenantID = tenantID
 
 		if err := tx.Create(user).Error; err != nil {
 			return err
@@ -325,10 +335,17 @@ func (uc *UserController) Update(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		uc.FailAndAbort(c, err.Error(), err)
 	}
+	tenantCtx, err := tenanthelper.FromGinContext(c)
+	if err != nil || tenantCtx.EffectiveTenantID == 0 {
+		uc.FailAndAbort(c, "当前处于平台态，禁止维护租户用户", err)
+	}
+	tenantID := tenantCtx.EffectiveTenantID
 
 	// 检查用户是否存在
 	user := models.NewUser()
-	err := user.GetUserByID(c, req.Id)
+	err = user.Find(c, func(db *gorm.DB) *gorm.DB {
+		return db.Where("id = ? AND tenant_id = ?", req.Id, tenantID)
+	})
 	if err != nil {
 		uc.FailAndAbort(c, err.Error(), err)
 	}
@@ -396,8 +413,9 @@ func (uc *UserController) Update(c *gin.Context) {
 			return err
 		}
 
-		// 删除现有的用户角色关联
-		if err := tx.Where("user_id = ?", user.ID).Delete(&models.SysUserRole{}).Error; err != nil {
+		tenantRoleQuery := tx.Session(&gorm.Session{NewDB: true}).Model(&models.SysRole{}).Where("tenant_id = ?", tenantID).Select("id")
+		// 只删除当前租户内的角色关联，避免破坏该用户在其他租户的角色。
+		if err := tx.Where("user_id = ? AND role_id IN (?)", user.ID, tenantRoleQuery).Delete(&models.SysUserRole{}).Error; err != nil {
 			return err
 		}
 
@@ -446,10 +464,17 @@ func (uc *UserController) Delete(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		uc.FailAndAbort(c, err.Error(), err)
 	}
+	tenantCtx, err := tenanthelper.FromGinContext(c)
+	if err != nil || tenantCtx.EffectiveTenantID == 0 {
+		uc.FailAndAbort(c, "当前处于平台态，禁止维护租户用户", err)
+	}
+	tenantID := tenantCtx.EffectiveTenantID
 
 	// 检查用户是否存在
 	user := models.NewUser()
-	err := user.GetUserByID(c, req.Id)
+	err = user.Find(c, func(db *gorm.DB) *gorm.DB {
+		return db.Where("id = ? AND tenant_id = ?", req.Id, tenantID)
+	})
 	if err != nil {
 		uc.FailAndAbort(c, err.Error(), err)
 	}
@@ -459,16 +484,17 @@ func (uc *UserController) Delete(c *gin.Context) {
 
 	// 使用事务删除用户和角色关联
 	err = app.DB().WithContext(c).Transaction(func(tx *gorm.DB) error {
+		tenantRoleQuery := tx.Session(&gorm.Session{NewDB: true}).Model(&models.SysRole{}).Where("tenant_id = ?", tenantID).Select("id")
 		// 删除用户角色关联
-		if err := tx.Where("user_id = ?", user.ID).Delete(&models.SysUserRole{}).Error; err != nil {
+		if err := tx.Where("user_id = ? AND role_id IN (?)", user.ID, tenantRoleQuery).Delete(&models.SysUserRole{}).Error; err != nil {
 			return err
 		}
 		// 删除用户租户关联
-		if err := tx.Where("user_id = ?", user.ID).Delete(&models.SysUserTenant{}).Error; err != nil {
+		if err := tx.Where("user_id = ? AND tenant_id = ?", user.ID, tenantID).Delete(&models.SysUserTenant{}).Error; err != nil {
 			return err
 		}
 		// 软删除用户
-		if err := tx.Where("id = ?", user.ID).Delete(user).Error; err != nil {
+		if err := tx.Where("id = ? AND tenant_id = ?", user.ID, tenantID).Delete(user).Error; err != nil {
 			return err
 		}
 
@@ -483,6 +509,29 @@ func (uc *UserController) Delete(c *gin.Context) {
 		uc.FailAndAbort(c, "删除用户失败", err)
 	}
 	uc.SuccessWithMessage(c, "删除成功", nil)
+}
+
+func ensureUserInCurrentTenant(c *gin.Context, userID uint) error {
+	tenantCtx, err := tenanthelper.FromGinContext(c)
+	if err != nil {
+		return err
+	}
+	if tenantCtx.Mode == tenanthelper.ModePlatform && tenantCtx.IsPlatformAdmin {
+		return nil
+	}
+	if tenantCtx.EffectiveTenantID == 0 {
+		return fmt.Errorf("当前处于平台态，禁止维护租户用户")
+	}
+	var count int64
+	if err := app.DB().WithContext(c).Model(&models.User{}).
+		Where("id = ? AND tenant_id = ?", userID, tenantCtx.EffectiveTenantID).
+		Count(&count).Error; err != nil {
+		return err
+	}
+	if count == 0 {
+		return fmt.Errorf("用户不存在或不属于当前租户")
+	}
+	return nil
 }
 
 // UpdateAccount 更新用户账户信息（密码、手机号、邮箱）

@@ -1,9 +1,11 @@
 package controllers
 
 import (
+	"fmt"
 	"gin-fast/app/global/app"
 	"gin-fast/app/models"
 	"gin-fast/app/service"
+	"gin-fast/app/utils/tenanthelper"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -39,6 +41,9 @@ func NewSysUserTenantController() *SysUserTenantController {
 // @Router /sysUserTenant/list [get]
 // @Security ApiKeyAuth
 func (sut *SysUserTenantController) List(c *gin.Context) {
+	if err := requirePlatformTenantAdmin(c); err != nil {
+		sut.FailAndAbort(c, err.Error(), err)
+	}
 	var req models.SysUserTenantListRequest
 	if err := req.Validate(c); err != nil {
 		sut.FailAndAbort(c, err.Error(), err)
@@ -81,6 +86,9 @@ func (sut *SysUserTenantController) List(c *gin.Context) {
 // @Router /sysUserTenant/get [get]
 // @Security ApiKeyAuth
 func (sut *SysUserTenantController) GetByID(c *gin.Context) {
+	if err := requirePlatformTenantAdmin(c); err != nil {
+		sut.FailAndAbort(c, err.Error(), err)
+	}
 	var req models.SysUserTenantGetRequest
 	if err := req.Validate(c); err != nil {
 		sut.FailAndAbort(c, err.Error(), err)
@@ -114,6 +122,9 @@ func (sut *SysUserTenantController) GetByID(c *gin.Context) {
 // @Router /sysUserTenant/batchAdd [post]
 // @Security ApiKeyAuth
 func (sut *SysUserTenantController) BatchAdd(c *gin.Context) {
+	if err := requirePlatformTenantAdmin(c); err != nil {
+		sut.FailAndAbort(c, err.Error(), err)
+	}
 	var req models.SysUserTenantBatchAddRequest
 	if err := req.Validate(c); err != nil {
 		sut.FailAndAbort(c, err.Error(), err)
@@ -179,6 +190,9 @@ func (sut *SysUserTenantController) BatchAdd(c *gin.Context) {
 // @Router /sysUserTenant/batchDelete [delete]
 // @Security ApiKeyAuth
 func (sut *SysUserTenantController) BatchDelete(c *gin.Context) {
+	if err := requirePlatformTenantAdmin(c); err != nil {
+		sut.FailAndAbort(c, err.Error(), err)
+	}
 	var req models.SysUserTenantBatchDeleteRequest
 	if err := req.Validate(c); err != nil {
 		sut.FailAndAbort(c, err.Error(), err)
@@ -245,6 +259,9 @@ func (sut *SysUserTenantController) BatchDelete(c *gin.Context) {
 // @Router /sysUserTenant/userListAll [get]
 // @Security ApiKeyAuth
 func (sut *SysUserTenantController) UserListAll(c *gin.Context) {
+	if err := requirePlatformTenantAdmin(c); err != nil {
+		sut.FailAndAbort(c, err.Error(), err)
+	}
 	var req models.UserListRequest
 	if err := req.Validate(c); err != nil {
 		sut.FailAndAbort(c, err.Error(), err)
@@ -285,6 +302,9 @@ func (sut *SysUserTenantController) UserListAll(c *gin.Context) {
 // @Router /sysUserTenant/getRolesAll [get]
 // @Security ApiKeyAuth
 func (sut *SysUserTenantController) GetRolesAll(c *gin.Context) {
+	if err := requirePlatformTenantAdmin(c); err != nil {
+		sut.FailAndAbort(c, err.Error(), err)
+	}
 	var req models.SysRoleListAllRequest
 	if err := req.Validate(c); err != nil {
 		sut.FailAndAbort(c, err.Error(), err)
@@ -317,6 +337,9 @@ func (sut *SysUserTenantController) GetRolesAll(c *gin.Context) {
 // @Router /sysUserTenant/getUserRoleIDs [get]
 // @Security ApiKeyAuth
 func (sut *SysUserTenantController) GetUserRoleIDs(c *gin.Context) {
+	if err := requirePlatformTenantAdmin(c); err != nil {
+		sut.FailAndAbort(c, err.Error(), err)
+	}
 	var req models.SysUserTenantGetUserRoleIDsRequest
 	if err := req.Validate(c); err != nil {
 		sut.FailAndAbort(c, err.Error(), err)
@@ -349,6 +372,9 @@ func (sut *SysUserTenantController) GetUserRoleIDs(c *gin.Context) {
 // @Router /sysUserTenant/setUserRoles [post]
 // @Security ApiKeyAuth
 func (sut *SysUserTenantController) SetUserRoles(c *gin.Context) {
+	if err := requirePlatformTenantAdmin(c); err != nil {
+		sut.FailAndAbort(c, err.Error(), err)
+	}
 	var req models.SysUserTenantSetRolesRequest
 	if err := req.Validate(c); err != nil {
 		sut.FailAndAbort(c, err.Error(), err)
@@ -412,4 +438,15 @@ func (sut *SysUserTenantController) SetUserRoles(c *gin.Context) {
 	}
 
 	sut.SuccessWithMessage(c, "设置用户角色成功", nil)
+}
+
+func requirePlatformTenantAdmin(c *gin.Context) error {
+	tenantCtx, err := tenanthelper.FromGinContext(c)
+	if err != nil {
+		return err
+	}
+	if tenantCtx.Mode == tenanthelper.ModePlatform && tenantCtx.IsPlatformAdmin {
+		return nil
+	}
+	return fmt.Errorf("仅平台管理员可维护用户租户关联")
 }
