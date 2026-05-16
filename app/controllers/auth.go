@@ -352,6 +352,15 @@ func (ac *AuthController) Logout(c *gin.Context) {
 // @Failure 500 {object} map[string]interface{} "生成验证码失败"
 // @Router /captcha/verify [get]
 func (ac *AuthController) GetVerifyImgString(c *gin.Context) {
+	if !app.ConfigYml.GetBool("captcha.open") {
+		ac.Success(c, gin.H{
+			"enabled":   false,
+			"captchaId": "",
+			"image":     "",
+		})
+		return
+	}
+
 	idKeyC, base64stringC, err := captchahelper.GetCaptchaHelper().GetVerifyImgString()
 	if err != nil {
 		ac.FailAndAbort(c, "生成验证码失败", err)
@@ -359,6 +368,7 @@ func (ac *AuthController) GetVerifyImgString(c *gin.Context) {
 	}
 
 	ac.Success(c, gin.H{
+		"enabled":   true,
 		"captchaId": idKeyC,
 		"image":     base64stringC,
 	})
