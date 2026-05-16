@@ -12,16 +12,16 @@ type RefreshRequest struct {
 
 type AddRequest struct {
 	Validator
-	UserName    string `form:"userName" validate:"required" message:"用户名不能为空"`
-	NickName    string `form:"nickName" validate:"required" message:"昵称不能为空"`
-	Phone       string `form:"phone"`
-	Email       string `form:"email"`
-	Password    string `form:"password" validate:"required|min_len:6" message:"密码至少6位"`
-	Sex         string `form:"sex" validate:"required" message:"性别不能为空"`
-	DeptId      uint   `form:"deptId" validate:"required" message:"部门ID不能为空"`
-	Roles       []uint `form:"roles" validate:"required" message:"角色不能为空"`
-	Status      int8   `form:"status"`
-	Description string `form:"description"`
+	UserName    string     `form:"userName" validate:"required" message:"用户名不能为空"`
+	NickName    string     `form:"nickName" validate:"required" message:"昵称不能为空"`
+	Phone       string     `form:"phone"`
+	Email       string     `form:"email"`
+	Password    string     `form:"password" validate:"required|min_len:6" message:"密码至少6位"`
+	Sex         string     `form:"sex" validate:"required" message:"性别不能为空"`
+	DeptId      FlexUint   `form:"deptId" validate:"required" message:"部门ID不能为空"`
+	Roles       []FlexUint `form:"roles" validate:"required" message:"角色不能为空"`
+	Status      FlexInt8   `form:"status"`
+	Description string     `form:"description"`
 }
 
 func (r *AddRequest) Validate(c *gin.Context) error {

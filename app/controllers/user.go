@@ -268,8 +268,8 @@ func (uc *UserController) Add(c *gin.Context) {
 		user.Email = req.Email
 		user.Password = string(hashedPassword)
 		user.Sex = req.Sex
-		user.DeptID = req.DeptId
-		user.Status = req.Status
+		user.DeptID = uint(req.DeptId)
+		user.Status = int8(req.Status)
 		user.Description = req.Description
 		user.TenantID = tenantID
 
@@ -283,7 +283,7 @@ func (uc *UserController) Add(c *gin.Context) {
 			for i, roleID := range req.Roles {
 				userRoles[i] = models.SysUserRole{
 					UserID: user.ID,
-					RoleID: roleID,
+					RoleID: uint(roleID),
 				}
 			}
 			if err := tx.Create(&userRoles).Error; err != nil {
@@ -311,7 +311,12 @@ func (uc *UserController) Add(c *gin.Context) {
 		uc.FailAndAbort(c, "Failed to create user", err)
 	}
 
-	if err = uc.CasbinService.AddRoleForUser(c, user.ID, req.Roles); err != nil {
+	roleIDs := make([]uint, len(req.Roles))
+	for i, roleID := range req.Roles {
+		roleIDs[i] = uint(roleID)
+	}
+
+	if err = uc.CasbinService.AddRoleForUser(c, user.ID, roleIDs); err != nil {
 		uc.FailAndAbort(c, "Failed to create user", err)
 	}
 
