@@ -11,6 +11,13 @@ import (
 	"gorm.io/gorm"
 )
 
+func stringPtr(v string) *string { return &v }
+
+func uintToStringPtr(v uint) *string {
+	s := fmt.Sprintf("%d", v)
+	return &s
+}
+
 func TestEduScheduleServiceCompile(t *testing.T) {
 	setupEduTestDB(t)
 	_ = NewEduScheduleService()
@@ -42,6 +49,7 @@ func TestEduScheduleServiceGenerateOneToOneSingleLesson(t *testing.T) {
 	if err := db.Create(rule).Error; err != nil {
 		t.Fatalf("seed rule: %v", err)
 	}
+	seedRuleWeekdays(t, db, 1, rule)
 
 	lessons, err := svc.GenerateLessonsForRule(ctx, rule.ID, 1)
 	if err != nil {
@@ -78,7 +86,7 @@ func TestEduScheduleServiceGenerateWeeklyClassLessonsByTerm(t *testing.T) {
 		TeachingMode: "offline",
 		RequiresRoom: 1,
 		RoomID:       1,
-		Weekday:      1,
+		Weekdays:     []int8{1},
 		StartTime:    "09:00",
 		EndTime:      "10:00",
 		Status:       1,
@@ -87,6 +95,7 @@ func TestEduScheduleServiceGenerateWeeklyClassLessonsByTerm(t *testing.T) {
 	if err := db.Create(rule).Error; err != nil {
 		t.Fatalf("seed rule: %v", err)
 	}
+	seedRuleWeekdays(t, db, 1, rule)
 
 	lessons, err := svc.GenerateLessonsForRule(ctx, rule.ID, 1)
 	if err != nil {
@@ -122,7 +131,7 @@ func TestEduScheduleServiceSkipsClosedDays(t *testing.T) {
 		TeachingMode: "offline",
 		RequiresRoom: 1,
 		RoomID:       1,
-		Weekday:      1,
+		Weekdays:     []int8{1},
 		StartTime:    "09:00",
 		EndTime:      "10:00",
 		Status:       1,
@@ -131,6 +140,7 @@ func TestEduScheduleServiceSkipsClosedDays(t *testing.T) {
 	if err := db.Create(rule).Error; err != nil {
 		t.Fatalf("seed rule: %v", err)
 	}
+	seedRuleWeekdays(t, db, 1, rule)
 
 	lessons, err := svc.GenerateLessonsForRule(ctx, rule.ID, 1)
 	if err != nil {
@@ -228,7 +238,7 @@ func TestEduScheduleServiceWritesEligibilityForActiveClassMembers(t *testing.T) 
 		TeachingMode: "offline",
 		RequiresRoom: 1,
 		RoomID:       1,
-		Weekday:      1,
+		Weekdays:     []int8{1},
 		StartTime:    "09:00",
 		EndTime:      "10:00",
 		Status:       1,
@@ -237,6 +247,7 @@ func TestEduScheduleServiceWritesEligibilityForActiveClassMembers(t *testing.T) 
 	if err := db.Create(rule).Error; err != nil {
 		t.Fatalf("seed rule: %v", err)
 	}
+	seedRuleWeekdays(t, db, 1, rule)
 
 	lessons, err := svc.GenerateLessonsForRule(ctx, rule.ID, 1)
 	if err != nil {
@@ -285,6 +296,7 @@ func TestEduScheduleServiceGenerateRequiredClassPolicyRejectsIneligibleOnlineLes
 	if err := db.Create(rule).Error; err != nil {
 		t.Fatalf("seed rule: %v", err)
 	}
+	seedRuleWeekdays(t, db, 1, rule)
 
 	if _, err := svc.GenerateLessonsForRule(ctx, rule.ID, 1); err == nil {
 		t.Fatalf("expected required class policy to reject ineligible online lesson")
@@ -340,6 +352,257 @@ func TestEduScheduleServiceGenerateNoneClassPolicySkipsEligibilityRows(t *testin
 	}
 }
 
+func TestEduScheduleServiceCreateRuleGeneratesLessonsImmediately(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduScheduleService()
+	ctx := contextWithTenant(1)
+	seedEduTenantData(t, 1)
+	seedStudent(t, db, 1, 1)
+	seedBenefitProductAndStudentBenefitForSchedule(t, db, 1, 1, 1, 1, time.Date(2026, 5, 10, 0, 0, 0, 0, time.UTC), time.Date(2026, 5, 20, 0, 0, 0, 0, time.UTC))
+
+	rule := &models.EduScheduleRule{
+		Name:         "新增即生成",
+		RuleType:     "one_to_one",
+		RepeatType:   "single",
+		StudentID:    1,
+		CourseID:     1,
+		TeacherID:    1,
+		TeachingMode: "offline",
+		RequiresRoom: 1,
+		RoomID:       1,
+		StartDate:    &models.JSONTime{Time: time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)},
+		StartTime:    "09:00",
+		EndTime:      "10:00",
+		Status:       1,
+		CreatedBy:    88,
+		TenantID:     1,
+	}
+
+	if err := svc.CreateRule(ctx, rule); err != nil {
+		t.Fatalf("create rule: %v", err)
+	}
+
+	var lessons []models.EduLesson
+	if err := db.Order("lesson_date asc, id asc").Find(&lessons).Error; err != nil {
+		t.Fatalf("load lessons: %v", err)
+	}
+	if len(lessons) != 1 {
+		t.Fatalf("expected 1 lesson after create rule, got %d", len(lessons))
+	}
+	if lessons[0].RuleID != rule.ID || lessons[0].TeacherID != 1 || lessons[0].LessonDate == nil {
+		t.Fatalf("unexpected lesson after create: %+v", lessons[0])
+	}
+	if !lessons[0].LessonDate.Time.Equal(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)) {
+		t.Fatalf("unexpected generated lesson date: %+v", lessons[0])
+	}
+}
+
+func TestEduScheduleServiceRuleWeekdaysNormalizeAndList(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduScheduleService()
+	ctx := contextWithTenant(1)
+	seedEduTenantData(t, 1)
+	seedStudent(t, db, 1, 1)
+	seedClassWithMembers(t, db, 1, 1, []uint{1}, "required")
+	seedBenefitProductAndStudentBenefitForSchedule(t, db, 1, 1, 1, 1, time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 6, 30, 0, 0, 0, 0, time.UTC))
+
+	rule := &models.EduScheduleRule{
+		Name:         "晚班",
+		RuleType:     "class",
+		RepeatType:   "weekly",
+		ClassID:      1,
+		CourseID:     1,
+		TeacherID:    1,
+		TeachingMode: "offline",
+		RequiresRoom: 1,
+		RoomID:       1,
+		Weekdays:     []int8{4, 2, 2},
+		StartDate:    &models.JSONTime{Time: time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)},
+		EndDate:      &models.JSONTime{Time: time.Date(2026, 5, 17, 0, 0, 0, 0, time.UTC)},
+		StartTime:    "19:00",
+		EndTime:      "20:00",
+		Status:       0,
+		TenantID:     1,
+	}
+	if err := svc.CreateRule(ctx, rule); err != nil {
+		t.Fatalf("create rule: %v", err)
+	}
+
+	rows, err := svc.ListRulesWithWeekdays(ctx, 1, &models.EduScheduleRuleListRequest{})
+	if err != nil {
+		t.Fatalf("list rules: %v", err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("expected 1 rule, got %d", len(rows))
+	}
+	if got := fmt.Sprint(rows[0].Weekdays); got != "[2 4]" {
+		t.Fatalf("expected normalized weekdays [2 4], got %s", got)
+	}
+
+	var count int64
+	if err := db.Model(&models.EduScheduleRuleWeekday{}).Where("rule_id = ?", rule.ID).Count(&count).Error; err != nil {
+		t.Fatalf("count weekdays: %v", err)
+	}
+	if count != 2 {
+		t.Fatalf("expected 2 child rows, got %d", count)
+	}
+}
+
+func TestEduScheduleServiceUpdateRuleWeeklyToSingleClearsWeekdays(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduScheduleService()
+	ctx := contextWithTenant(1)
+	seedEduTenantData(t, 1)
+	seedStudent(t, db, 1, 1)
+	seedBenefitProductAndStudentBenefitForSchedule(t, db, 1, 1, 1, 1, time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 6, 30, 0, 0, 0, 0, time.UTC))
+
+	rule := &models.EduScheduleRule{
+		Name:          "周几转单次",
+		RuleType:      "one_to_one",
+		RepeatType:    "weekly",
+		StudentID:     1,
+		CourseID:      1,
+		TeacherID:     1,
+		TeachingMode:  "offline",
+		RequiresRoom:  1,
+		RoomID:        1,
+		StartDate:     &models.JSONTime{Time: time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)},
+		EndDate:       &models.JSONTime{Time: time.Date(2026, 5, 25, 0, 0, 0, 0, time.UTC)},
+		Weekdays:      []int8{1, 3},
+		StartTime:     "09:00",
+		EndTime:       "10:00",
+		Status:        1,
+		Version:       1,
+		EffectiveFrom: &models.JSONTime{Time: time.Date(2026, 5, 18, 0, 0, 0, 0, time.UTC)},
+		CreatedBy:     77,
+		TenantID:      1,
+	}
+	if err := svc.CreateRule(ctx, rule); err != nil {
+		t.Fatalf("create rule: %v", err)
+	}
+
+	var weekdayCount int64
+	if err := db.Model(&models.EduScheduleRuleWeekday{}).Where("rule_id = ?", rule.ID).Count(&weekdayCount).Error; err != nil {
+		t.Fatalf("count weekdays before update: %v", err)
+	}
+	if weekdayCount != 2 {
+		t.Fatalf("expected 2 weekdays before update, got %d", weekdayCount)
+	}
+
+	rule.RepeatType = "single"
+	rule.Weekdays = nil
+	rule.Version = 2
+	if err := svc.UpdateRule(ctx, rule); err != nil {
+		t.Fatalf("update rule: %v", err)
+	}
+
+	if err := db.Model(&models.EduScheduleRuleWeekday{}).Where("rule_id = ?", rule.ID).Count(&weekdayCount).Error; err != nil {
+		t.Fatalf("count weekdays after update: %v", err)
+	}
+	if weekdayCount != 0 {
+		t.Fatalf("expected weekdays cleared after switching to single, got %d", weekdayCount)
+	}
+
+	var lessons []models.EduLesson
+	if err := db.Where("rule_id = ?", rule.ID).Order("lesson_date asc, id asc").Find(&lessons).Error; err != nil {
+		t.Fatalf("load lessons: %v", err)
+	}
+	if len(lessons) != 3 {
+		t.Fatalf("expected 3 lessons after switching to single, got %d", len(lessons))
+	}
+	var futureLessons []models.EduLesson
+	for _, item := range lessons {
+		if item.LessonDate == nil {
+			t.Fatalf("lesson date missing: %+v", item)
+		}
+		if !item.LessonDate.Time.Before(time.Date(2026, 5, 18, 0, 0, 0, 0, time.UTC)) {
+			futureLessons = append(futureLessons, item)
+		}
+	}
+	if len(futureLessons) != 1 {
+		t.Fatalf("expected 1 future lesson after switching to single, got %d", len(futureLessons))
+	}
+	lesson := futureLessons[0]
+	if lesson.RuleVersion != 2 || lesson.TeacherID != 1 || lesson.StartTime != "09:00" || lesson.EndTime != "10:00" {
+		t.Fatalf("expected regenerated single lesson, got %+v", lesson)
+	}
+	expectedDates := map[string]struct{}{
+		"2026-05-18": {},
+	}
+	for _, item := range futureLessons {
+		gotDate := item.LessonDate.Time.Format("2006-01-02")
+		if _, ok := expectedDates[gotDate]; !ok {
+			t.Fatalf("unexpected future lesson date: %+v", item)
+		}
+		delete(expectedDates, gotDate)
+		if item.RuleVersion != 2 || item.TeacherID != 1 || item.StartTime != "09:00" || item.EndTime != "10:00" {
+			t.Fatalf("unexpected regenerated lesson: %+v", item)
+		}
+	}
+	if len(expectedDates) != 0 {
+		t.Fatalf("missing regenerated lessons for dates: %v", expectedDates)
+	}
+	for _, item := range lessons {
+		if item.LessonDate.Time.Before(time.Date(2026, 5, 18, 0, 0, 0, 0, time.UTC)) && item.RuleVersion != 1 {
+			t.Fatalf("historical lesson should remain on old version, got %+v", item)
+		}
+	}
+}
+
+func TestEduScheduleServiceDeleteRuleRemovesWeekdays(t *testing.T) {
+	db := setupEduTestDB(t)
+	svc := NewEduScheduleService()
+	ctx := contextWithTenant(1)
+	seedEduTenantData(t, 1)
+
+	rule := &models.EduScheduleRule{
+		Name:      "删除清理周几",
+		RuleType:  "one_to_one",
+		RepeatType: "weekly",
+		StudentID: 1,
+		CourseID:  1,
+		TeacherID: 1,
+		Weekdays:  []int8{1, 4},
+		StartDate: &models.JSONTime{Time: time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)},
+		StartTime: "09:00",
+		EndTime:   "10:00",
+		Status:    0,
+		TenantID:  1,
+	}
+	if err := db.Create(rule).Error; err != nil {
+		t.Fatalf("seed rule: %v", err)
+	}
+	seedRuleWeekdays(t, db, 1, rule)
+
+	var weekdayCount int64
+	if err := db.Model(&models.EduScheduleRuleWeekday{}).Where("rule_id = ?", rule.ID).Count(&weekdayCount).Error; err != nil {
+		t.Fatalf("count weekdays before delete: %v", err)
+	}
+	if weekdayCount != 2 {
+		t.Fatalf("expected 2 weekdays before delete, got %d", weekdayCount)
+	}
+
+	if err := svc.DeleteRule(ctx, 1, rule.ID); err != nil {
+		t.Fatalf("delete rule: %v", err)
+	}
+
+	if err := db.Model(&models.EduScheduleRuleWeekday{}).Where("rule_id = ?", rule.ID).Count(&weekdayCount).Error; err != nil {
+		t.Fatalf("count weekdays after delete: %v", err)
+	}
+	if weekdayCount != 0 {
+		t.Fatalf("expected weekdays removed after delete, got %d", weekdayCount)
+	}
+
+	var remaining int64
+	if err := db.Model(&models.EduScheduleRule{}).Where("id = ?", rule.ID).Count(&remaining).Error; err != nil {
+		t.Fatalf("count rule after delete: %v", err)
+	}
+	if remaining != 0 {
+		t.Fatalf("expected rule deleted, got %d remaining", remaining)
+	}
+}
+
+
 func TestEduScheduleServiceConflictRejectsTeacherOverlap(t *testing.T) {
 	db := setupEduTestDB(t)
 	svc := NewEduScheduleService()
@@ -361,9 +624,9 @@ func TestEduScheduleServiceConflictRejectsTeacherOverlap(t *testing.T) {
 		LessonDate:   datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
 		StartTime:    "09:30",
 		EndTime:      "10:30",
-		StudentID:    2,
-		CourseID:     1,
-		TeacherID:    7,
+		StudentID:    "2",
+		CourseID:     "1",
+		TeacherID:    "7",
 		TeachingMode: "online",
 		RequiresRoom: 0,
 	})
@@ -397,12 +660,12 @@ func TestEduScheduleServiceConflictRejectsRoomOverlap(t *testing.T) {
 		LessonDate:   datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
 		StartTime:    "09:30",
 		EndTime:      "10:30",
-		ClassID:      2,
-		CourseID:     1,
-		TeacherID:    8,
+		ClassID:      "2",
+		CourseID:     "1",
+		TeacherID:    "8",
 		TeachingMode: "offline",
 		RequiresRoom: 1,
-		RoomID:       3,
+		RoomID:       "3",
 	})
 	if err == nil {
 		t.Fatalf("expected room conflict error")
@@ -433,9 +696,9 @@ func TestEduScheduleServiceConflictRejectsStudentOverlap(t *testing.T) {
 		LessonDate:   datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
 		StartTime:    "09:30",
 		EndTime:      "10:30",
-		StudentID:    5,
-		CourseID:     1,
-		TeacherID:    8,
+		StudentID:    "5",
+		CourseID:     "1",
+		TeacherID:    "8",
 		TeachingMode: "online",
 		RequiresRoom: 0,
 	})
@@ -468,9 +731,9 @@ func TestEduScheduleServiceConflictRejectsClassOverlap(t *testing.T) {
 		LessonDate:   datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
 		StartTime:    "09:30",
 		EndTime:      "10:30",
-		ClassID:      9,
-		CourseID:     1,
-		TeacherID:    8,
+		ClassID:      "9",
+		CourseID:     "1",
+		TeacherID:    "8",
 		TeachingMode: "online",
 		RequiresRoom: 0,
 	})
@@ -502,13 +765,13 @@ func TestEduScheduleServiceConflictOverrideRequiresReasonAndRecordsOverride(t *t
 		LessonDate:            datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
 		StartTime:             "09:30",
 		EndTime:               "10:30",
-		StudentID:             2,
-		CourseID:              1,
-		TeacherID:             7,
+		StudentID:             "2",
+		CourseID:              "1",
+		TeacherID:             "7",
 		TeachingMode:          "online",
 		RequiresRoom:          0,
 		AllowConflictOverride: true,
-		OperatorID:            99,
+		OperatorID:            "99",
 	}
 	if _, err := svc.CheckConflicts(ctx, req); err == nil {
 		t.Fatalf("expected override without reason to fail")
@@ -557,13 +820,13 @@ func TestEduScheduleServiceRescheduleLesson(t *testing.T) {
 		seedExistingLesson(t, db, 1, lesson)
 
 		err := svc.RescheduleLesson(ctx, 1, &models.EduLessonRescheduleRequest{
-			LessonID:   lesson.ID,
+			LessonID:   models.FlexString(fmt.Sprintf("%d", lesson.ID)),
 			LessonDate: datePtr(time.Date(2026, 5, 12, 0, 0, 0, 0, time.UTC)),
 			StartTime:  "10:00",
 			EndTime:    "11:00",
-			TeacherID:  8,
+			TeacherID:  "8",
 			TeachingMode: "offline",
-			RoomID:    uintPtr(5),
+			RoomID:    models.FlexString("5"),
 		})
 		if err != nil {
 			t.Fatalf("reschedule lesson: %v", err)
@@ -643,11 +906,11 @@ func TestEduScheduleServiceRescheduleLesson(t *testing.T) {
 		})
 
 		err := svc.RescheduleLesson(ctx, 1, &models.EduLessonRescheduleRequest{
-			LessonID:    lesson.ID,
+			LessonID:    models.FlexString(fmt.Sprintf("%d", lesson.ID)),
 			LessonDate:  datePtr(time.Date(2026, 5, 12, 0, 0, 0, 0, time.UTC)),
 			StartTime:   "10:00",
 			EndTime:     "11:00",
-			TeacherID:   8,
+			TeacherID:   "8",
 			TeachingMode: "online",
 		})
 		if err == nil {
@@ -701,11 +964,11 @@ func TestEduScheduleServiceRescheduleLesson(t *testing.T) {
 		})
 
 		err := svc.RescheduleLesson(ctx, 1, &models.EduLessonRescheduleRequest{
-			LessonID:              lesson.ID,
+			LessonID:              models.FlexString(fmt.Sprintf("%d", lesson.ID)),
 			LessonDate:            datePtr(time.Date(2026, 5, 12, 0, 0, 0, 0, time.UTC)),
 			StartTime:             "10:00",
 			EndTime:               "11:00",
-			TeacherID:             8,
+			TeacherID:             "8",
 			TeachingMode:          "online",
 			AllowConflictOverride: true,
 			OverrideReason:        "管理员确认可覆盖",
@@ -752,11 +1015,11 @@ func TestEduScheduleServiceRescheduleLesson(t *testing.T) {
 		seedExistingLesson(t, db, 1, lesson)
 
 		err := svc.RescheduleLesson(ctx, 1, &models.EduLessonRescheduleRequest{
-			LessonID:    lesson.ID,
+			LessonID:    models.FlexString(fmt.Sprintf("%d", lesson.ID)),
 			LessonDate:  datePtr(time.Date(2026, 5, 12, 0, 0, 0, 0, time.UTC)),
 			StartTime:   "10:00",
 			EndTime:     "11:00",
-			TeacherID:   8,
+			TeacherID:   "8",
 			TeachingMode: "online",
 		})
 		if err == nil {
@@ -788,22 +1051,22 @@ func TestEduScheduleServiceRescheduleLesson(t *testing.T) {
 		seedExistingLesson(t, db, 1, lesson)
 
 		if err := svc.RescheduleLesson(ctx, 1, &models.EduLessonRescheduleRequest{
-			LessonID:    lesson.ID,
+			LessonID:    models.FlexString(fmt.Sprintf("%d", lesson.ID)),
 			LessonDate:  datePtr(time.Date(2026, 5, 12, 0, 0, 0, 0, time.UTC)),
 			StartTime:   "11:00",
 			EndTime:     "10:00",
-			TeacherID:   8,
+			TeacherID:   "8",
 			TeachingMode: "online",
 		}); err == nil {
 			t.Fatalf("expected invalid time to fail")
 		}
 
 		if err := svc.RescheduleLesson(ctx, 1, &models.EduLessonRescheduleRequest{
-			LessonID:    lesson.ID,
+			LessonID:    models.FlexString(fmt.Sprintf("%d", lesson.ID)),
 			LessonDate:  datePtr(time.Date(2026, 5, 12, 0, 0, 0, 0, time.UTC)),
 			StartTime:   "10:00",
 			EndTime:     "11:00",
-			TeacherID:   8,
+			TeacherID:   "8",
 			TeachingMode: "offline",
 		}); err == nil {
 			t.Fatalf("expected offline lesson without room to fail")
@@ -836,15 +1099,14 @@ func TestEduScheduleServiceMakeupLesson(t *testing.T) {
 		}
 		seedExistingLesson(t, db, 1, sourceLesson)
 
-		roomID := uint(5)
 		lesson, err := svc.MakeupLesson(ctx, 1, &models.EduLessonMakeupRequest{
-			LessonID:     sourceLesson.ID,
+LessonID: models.FlexString(fmt.Sprintf("%d", sourceLesson.ID)),
 			LessonDate:   datePtr(time.Date(2026, 5, 12, 0, 0, 0, 0, time.UTC)),
 			StartTime:    "10:00",
 			EndTime:      "11:00",
-			TeacherID:    8,
+			TeacherID:    "8",
 			TeachingMode: "offline",
-			RoomID:       &roomID,
+			RoomID:       models.FlexString("5"),
 			Reason:       "原课次请假补课",
 		})
 		if err != nil {
@@ -918,11 +1180,11 @@ func TestEduScheduleServiceMakeupLesson(t *testing.T) {
 		})
 
 		_, err := svc.MakeupLesson(ctx, 1, &models.EduLessonMakeupRequest{
-			LessonID:     sourceLesson.ID,
+LessonID: models.FlexString(fmt.Sprintf("%d", sourceLesson.ID)),
 			LessonDate:   datePtr(time.Date(2026, 5, 12, 0, 0, 0, 0, time.UTC)),
 			StartTime:    "10:00",
 			EndTime:      "11:00",
-			TeacherID:    8,
+			TeacherID:    "8",
 			TeachingMode: "online",
 			Reason:       "原课次补课",
 		})
@@ -968,11 +1230,11 @@ func TestEduScheduleServiceMakeupLesson(t *testing.T) {
 		seedExistingLesson(t, db, 1, sourceLesson)
 
 		lesson, err := svc.MakeupLesson(ctx, 1, &models.EduLessonMakeupRequest{
-			LessonID:     sourceLesson.ID,
+LessonID: models.FlexString(fmt.Sprintf("%d", sourceLesson.ID)),
 			LessonDate:   datePtr(time.Date(2026, 5, 12, 0, 0, 0, 0, time.UTC)),
 			StartTime:    "10:00",
 			EndTime:      "11:00",
-			TeacherID:    7,
+			TeacherID:    "7",
 			TeachingMode: "online",
 			Reason:       "原课次补课",
 		})
@@ -1016,7 +1278,7 @@ func TestEduScheduleServiceStopCancelRestoreLesson(t *testing.T) {
 		}
 		seedExistingLesson(t, db, 1, lesson)
 
-		if err := svc.StopLesson(ctx, 1, &models.EduLessonStopRequest{LessonID: lesson.ID, Reason: "临时停课"}); err != nil {
+		if err := svc.StopLesson(ctx, 1, &models.EduLessonStopRequest{LessonID: models.FlexString(fmt.Sprintf("%d", lesson.ID)), Reason: "临时停课"}); err != nil {
 			t.Fatalf("stop lesson: %v", err)
 		}
 
@@ -1059,7 +1321,7 @@ func TestEduScheduleServiceStopCancelRestoreLesson(t *testing.T) {
 		}
 		seedExistingLesson(t, db, 1, lesson)
 
-		if err := svc.CancelLesson(ctx, 1, &models.EduLessonCancelRequest{LessonID: lesson.ID, Reason: "客户取消"}); err != nil {
+		if err := svc.CancelLesson(ctx, 1, &models.EduLessonCancelRequest{LessonID: models.FlexString(fmt.Sprintf("%d", lesson.ID)), Reason: "客户取消"}); err != nil {
 			t.Fatalf("cancel lesson: %v", err)
 		}
 
@@ -1120,7 +1382,7 @@ func TestEduScheduleServiceStopCancelRestoreLesson(t *testing.T) {
 			TenantID:     1,
 		})
 
-		if err := svc.RestoreLesson(ctx, 1, &models.EduLessonRestoreRequest{LessonID: lesson.ID, Reason: "恢复排课"}); err == nil {
+		if err := svc.RestoreLesson(ctx, 1, &models.EduLessonRestoreRequest{LessonID: models.FlexString(fmt.Sprintf("%d", lesson.ID)), Reason: "恢复排课"}); err == nil {
 			t.Fatalf("expected conflict to block normal restore")
 		}
 
@@ -1155,7 +1417,7 @@ func TestEduScheduleServiceStopCancelRestoreLesson(t *testing.T) {
 		}
 		seedExistingLesson(t, db, 1, lesson)
 
-		if err := svc.RestoreLesson(ctx, 1, &models.EduLessonRestoreRequest{LessonID: lesson.ID, Reason: "恢复排课"}); err == nil {
+		if err := svc.RestoreLesson(ctx, 1, &models.EduLessonRestoreRequest{LessonID: models.FlexString(fmt.Sprintf("%d", lesson.ID)), Reason: "恢复排课"}); err == nil {
 			t.Fatalf("expected restore to fail when eligibility is invalid")
 		}
 		var updated models.EduLesson
@@ -1187,13 +1449,13 @@ func TestEduScheduleServiceStopCancelRestoreLesson(t *testing.T) {
 		}
 		seedExistingLesson(t, db, 1, lesson)
 
-		if err := svc.StopLesson(ctx, 1, &models.EduLessonStopRequest{LessonID: lesson.ID, Reason: "临时停课"}); err == nil {
+		if err := svc.StopLesson(ctx, 1, &models.EduLessonStopRequest{LessonID: models.FlexString(fmt.Sprintf("%d", lesson.ID)), Reason: "临时停课"}); err == nil {
 			t.Fatalf("expected completed stop to fail")
 		}
-		if err := svc.CancelLesson(ctx, 1, &models.EduLessonCancelRequest{LessonID: lesson.ID, Reason: "客户取消"}); err == nil {
+		if err := svc.CancelLesson(ctx, 1, &models.EduLessonCancelRequest{LessonID: models.FlexString(fmt.Sprintf("%d", lesson.ID)), Reason: "客户取消"}); err == nil {
 			t.Fatalf("expected completed cancel to fail")
 		}
-		if err := svc.RestoreLesson(ctx, 1, &models.EduLessonRestoreRequest{LessonID: lesson.ID, Reason: "恢复"}); err == nil {
+		if err := svc.RestoreLesson(ctx, 1, &models.EduLessonRestoreRequest{LessonID: models.FlexString(fmt.Sprintf("%d", lesson.ID)), Reason: "恢复"}); err == nil {
 			t.Fatalf("expected completed restore to fail")
 		}
 	})
@@ -1218,7 +1480,7 @@ func TestEduScheduleServiceRuleChangePreviewAndRegenerate(t *testing.T) {
 		TeachingMode:  "offline",
 		RequiresRoom:  1,
 		RoomID:        1,
-		Weekday:       1,
+		Weekdays:      []int8{1},
 		StartTime:     "09:00",
 		EndTime:       "10:00",
 		StartDate:     datePtr(time.Date(2026, 5, 11, 0, 0, 0, 0, time.UTC)),
@@ -1231,6 +1493,7 @@ func TestEduScheduleServiceRuleChangePreviewAndRegenerate(t *testing.T) {
 	if err := db.Create(rule).Error; err != nil {
 		t.Fatalf("seed rule: %v", err)
 	}
+	seedRuleWeekdays(t, db, 1, rule)
 
 	seedExistingLesson(t, db, 1, &models.EduLesson{
 		RuleID:      rule.ID,
@@ -1313,8 +1576,8 @@ func TestEduScheduleServiceRuleChangePreviewAndRegenerate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("regenerate future lessons: %v", err)
 	}
-	if len(regenerated) != 1 {
-		t.Fatalf("expected 1 regenerated lesson, got %d", len(regenerated))
+	if len(regenerated) != 2 {
+		t.Fatalf("expected 2 regenerated lessons, got %d", len(regenerated))
 	}
 	for _, lesson := range regenerated {
 		if lesson.RuleVersion != 2 {
@@ -1329,8 +1592,8 @@ func TestEduScheduleServiceRuleChangePreviewAndRegenerate(t *testing.T) {
 	if err := db.Order("lesson_date asc, id asc").Find(&lessons).Error; err != nil {
 		t.Fatalf("load lessons: %v", err)
 	}
-	if len(lessons) != 5 {
-		t.Fatalf("expected 5 lessons after regeneration, got %d", len(lessons))
+	if len(lessons) != 6 {
+		t.Fatalf("expected 6 lessons after regeneration, got %d", len(lessons))
 	}
 	for _, lesson := range lessons {
 		if lesson.Status == "completed" || lesson.IsManualAdjusted == 1 {
@@ -1415,6 +1678,18 @@ func seedBenefitProductAndStudentBenefitForSchedule(t *testing.T, db *gorm.DB, t
 
 func datePtr(t time.Time) *models.JSONTime {
 	return &models.JSONTime{Time: t}
+}
+
+func seedRuleWeekdays(t *testing.T, db *gorm.DB, tenantID uint, rule *models.EduScheduleRule) {
+	t.Helper()
+	if rule == nil || rule.ID == 0 {
+		t.Fatalf("seed rule weekdays requires persisted rule")
+	}
+	for _, weekday := range rule.Weekdays {
+		if err := db.Create(&models.EduScheduleRuleWeekday{RuleID: rule.ID, Weekday: weekday, TenantID: tenantID}).Error; err != nil {
+			t.Fatalf("seed rule weekday: %v", err)
+		}
+	}
 }
 
 func seedExistingLesson(t *testing.T, db *gorm.DB, tenantID uint, lesson *models.EduLesson) {

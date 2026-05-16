@@ -91,15 +91,19 @@ func (r *BaseRequest) parseArrayParams(c *gin.Context, obj interface{}) {
 					elemType := field.Type().Elem()
 					switch elemType.Kind() {
 					case reflect.Uint:
-						uintSlice := make([]uint, len(arrayValues))
+						typedSlice := reflect.MakeSlice(field.Type(), len(arrayValues), len(arrayValues))
 						for j, val := range arrayValues {
 							if u, err := strconv.ParseUint(val, 10, 64); err == nil {
-								uintSlice[j] = uint(u)
+								typedSlice.Index(j).SetUint(u)
 							}
 						}
-						field.Set(reflect.ValueOf(uintSlice))
+						field.Set(typedSlice)
 					case reflect.String:
-						field.Set(reflect.ValueOf(arrayValues))
+						typedSlice := reflect.MakeSlice(field.Type(), len(arrayValues), len(arrayValues))
+						for j, val := range arrayValues {
+							typedSlice.Index(j).SetString(val)
+						}
+						field.Set(typedSlice)
 					case reflect.Struct:
 						// 处理 time.Time 类型
 						if elemType.Name() == "Time" && elemType.PkgPath() == "time" {

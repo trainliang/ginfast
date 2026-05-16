@@ -19,7 +19,7 @@ func NewEduStatisticsController() *EduStatisticsController {
 
 func (ctl *EduStatisticsController) Schedule(c *gin.Context) {
 	var req models.EduStatisticsRangeRequest
-	if err := c.ShouldBind(&req); err != nil {
+	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
 	resp, err := ctl.EduStatisticsService.ScheduleStatistics(c, &req)
@@ -31,7 +31,7 @@ func (ctl *EduStatisticsController) Schedule(c *gin.Context) {
 
 func (ctl *EduStatisticsController) Benefits(c *gin.Context) {
 	var req models.EduStatisticsRangeRequest
-	if err := c.ShouldBind(&req); err != nil {
+	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
 	resp, err := ctl.EduStatisticsService.BenefitStatistics(c, &req)
@@ -43,7 +43,7 @@ func (ctl *EduStatisticsController) Benefits(c *gin.Context) {
 
 func (ctl *EduStatisticsController) ExternalSync(c *gin.Context) {
 	var req models.EduStatisticsRangeRequest
-	if err := c.ShouldBind(&req); err != nil {
+	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
 	resp, err := ctl.EduStatisticsService.ExternalSyncStatistics(c, &req)

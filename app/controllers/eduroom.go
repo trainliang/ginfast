@@ -54,7 +54,7 @@ func (ctl *EduRoomController) GetByID(c *gin.Context) {
 	}
 	room := models.NewEduRoom()
 	if err := room.Find(c, func(db *gorm.DB) *gorm.DB {
-		return db.Where("id = ? AND tenant_id = ?", req.ID, ctl.GetCurrentTenantID(c))
+		return db.Where("id = ? AND tenant_id = ?", uint(req.ID), ctl.GetCurrentTenantID(c))
 	}); err != nil {
 		ctl.FailAndAbort(c, "查询场地失败", err)
 	}
@@ -93,7 +93,7 @@ func (ctl *EduRoomController) Delete(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	if err := ctl.EduRoomService.Delete(c, ctl.RequireTenant(c), req.ID); err != nil {
+	if err := ctl.EduRoomService.Delete(c, ctl.RequireTenant(c), uint(req.ID)); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
 	ctl.SuccessWithMessage(c, "场地删除成功", nil)
@@ -107,7 +107,8 @@ func (ctl *EduRoomController) WeeklyRules(c *gin.Context) {
 	if roomID, err := parseOptionalPathUint(c, "id"); err != nil {
 		ctl.FailAndAbort(c, "场地ID格式错误", err)
 	} else if roomID > 0 {
-		req.RoomID = &roomID
+		flexRoomID := models.FlexUint(roomID)
+		req.RoomID = &flexRoomID
 	}
 	tenantID := ctl.GetCurrentTenantID(c)
 	scope := func(db *gorm.DB) *gorm.DB { return db.Where("tenant_id = ?", tenantID) }
@@ -127,7 +128,7 @@ func (ctl *EduRoomController) SaveWeeklyRules(c *gin.Context) {
 		ctl.FailAndAbort(c, "场地ID格式错误", err)
 	} else if roomID > 0 {
 		for i := range req.Rows {
-			req.Rows[i].RoomID = roomID
+			req.Rows[i].RoomID = models.FlexUint(roomID)
 		}
 	}
 	result, err := ctl.EduRoomService.SaveWeeklyRules(c, ctl.RequireTenant(c), req.Rows)
@@ -145,7 +146,8 @@ func (ctl *EduRoomController) Exceptions(c *gin.Context) {
 	if roomID, err := parseOptionalPathUint(c, "id"); err != nil {
 		ctl.FailAndAbort(c, "场地ID格式错误", err)
 	} else if roomID > 0 {
-		req.RoomID = &roomID
+		flexRoomID := models.FlexUint(roomID)
+		req.RoomID = &flexRoomID
 	}
 	tenantID := ctl.GetCurrentTenantID(c)
 	scope := func(db *gorm.DB) *gorm.DB { return db.Where("tenant_id = ?", tenantID) }
@@ -164,7 +166,7 @@ func (ctl *EduRoomController) AddException(c *gin.Context) {
 	if roomID, err := parseOptionalPathUint(c, "id"); err != nil {
 		ctl.FailAndAbort(c, "场地ID格式错误", err)
 	} else if roomID > 0 {
-		req.RoomID = roomID
+		req.RoomID = models.FlexUint(roomID)
 	}
 	exception := buildRoomExceptionFromAddRequest(&req, ctl.RequireTenant(c), ctl.GetCurrentUserID(c))
 	if err := ctl.EduRoomService.AddException(c, exception); err != nil {
@@ -181,7 +183,7 @@ func (ctl *EduRoomController) UpdateException(c *gin.Context) {
 	if roomID, err := parseOptionalPathUint(c, "id"); err != nil {
 		ctl.FailAndAbort(c, "场地ID格式错误", err)
 	} else if roomID > 0 {
-		req.RoomID = roomID
+		req.RoomID = models.FlexUint(roomID)
 	}
 	exception := buildRoomExceptionFromUpdateRequest(&req, ctl.RequireTenant(c), ctl.GetCurrentUserID(c))
 	if err := ctl.EduRoomService.UpdateException(c, exception); err != nil {
@@ -195,7 +197,7 @@ func (ctl *EduRoomController) DeleteException(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	if err := ctl.EduRoomService.DeleteException(c, ctl.RequireTenant(c), req.ID); err != nil {
+	if err := ctl.EduRoomService.DeleteException(c, ctl.RequireTenant(c), uint(req.ID)); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
 	ctl.SuccessWithMessage(c, "场地例外日期删除成功", nil)
@@ -242,7 +244,11 @@ func (ctl *EduRoomController) Export(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	rows, err := ctl.EduRoomService.ExportRows(c, ctl.RequireTenant(c), req.IDs)
+	ids := make([]uint, 0, len(req.IDs))
+	for _, id := range req.IDs {
+		ids = append(ids, uint(id))
+	}
+	rows, err := ctl.EduRoomService.ExportRows(c, ctl.RequireTenant(c), ids)
 	if err != nil {
 		ctl.FailAndAbort(c, "导出场地失败", err)
 	}
@@ -250,25 +256,25 @@ func (ctl *EduRoomController) Export(c *gin.Context) {
 }
 
 func buildRoomFromAddRequest(req *models.EduRoomAddRequest, tenantID, userID uint) *models.EduRoom {
-	room := &models.EduRoom{Name: req.Name, Code: req.Code, Type: req.Type, Capacity: req.Capacity, Location: req.Location, Status: 1, Remark: req.Remark, CreatedBy: userID, TenantID: tenantID}
+	room := &models.EduRoom{Name: req.Name, Code: req.Code, Type: req.Type, Capacity: int(req.Capacity), Location: req.Location, Status: 1, Remark: req.Remark, CreatedBy: userID, TenantID: tenantID}
 	if req.Status != nil {
-		room.Status = *req.Status
+		room.Status = int8(*req.Status)
 	}
 	return room
 }
 
 func buildRoomFromUpdateRequest(req *models.EduRoomUpdateRequest, tenantID, userID uint) *models.EduRoom {
-	room := &models.EduRoom{BaseModel: models.BaseModel{ID: req.ID}, Name: req.Name, Code: req.Code, Type: req.Type, Capacity: req.Capacity, Location: req.Location, Status: 1, Remark: req.Remark, CreatedBy: userID, TenantID: tenantID}
+	room := &models.EduRoom{BaseModel: models.BaseModel{ID: uint(req.ID)}, Name: req.Name, Code: req.Code, Type: req.Type, Capacity: int(req.Capacity), Location: req.Location, Status: 1, Remark: req.Remark, CreatedBy: userID, TenantID: tenantID}
 	if req.Status != nil {
-		room.Status = *req.Status
+		room.Status = int8(*req.Status)
 	}
 	return room
 }
 
 func buildRoomExceptionFromAddRequest(req *models.EduRoomExceptionAddRequest, tenantID, userID uint) *models.EduRoomException {
-	return &models.EduRoomException{RoomID: req.RoomID, ExceptionDate: req.ExceptionDate, Type: req.Type, StartTime: req.StartTime, EndTime: req.EndTime, Reason: req.Reason, CreatedBy: userID, TenantID: tenantID}
+	return &models.EduRoomException{RoomID: uint(req.RoomID), ExceptionDate: req.ExceptionDate, Type: req.Type, StartTime: req.StartTime, EndTime: req.EndTime, Reason: req.Reason, CreatedBy: userID, TenantID: tenantID}
 }
 
 func buildRoomExceptionFromUpdateRequest(req *models.EduRoomExceptionUpdateRequest, tenantID, userID uint) *models.EduRoomException {
-	return &models.EduRoomException{BaseModel: models.BaseModel{ID: req.ID}, RoomID: req.RoomID, ExceptionDate: req.ExceptionDate, Type: req.Type, StartTime: req.StartTime, EndTime: req.EndTime, Reason: req.Reason, CreatedBy: userID, TenantID: tenantID}
+	return &models.EduRoomException{BaseModel: models.BaseModel{ID: uint(req.ID)}, RoomID: uint(req.RoomID), ExceptionDate: req.ExceptionDate, Type: req.Type, StartTime: req.StartTime, EndTime: req.EndTime, Reason: req.Reason, CreatedBy: userID, TenantID: tenantID}
 }

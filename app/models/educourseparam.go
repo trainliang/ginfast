@@ -9,11 +9,11 @@ import (
 type EduCourseListRequest struct {
 	BasePaging
 	Validator
-	ID          *uint  `form:"id" json:"id"`
+	ID          *FlexUint `form:"id" json:"id"`
 	Name        string `form:"name" json:"name"`
 	Code        string `form:"code" json:"code"`
 	Type        string `form:"type" json:"type"`
-	Status      *int8  `form:"status" json:"status"`
+	Status      *FlexInt8 `form:"status" json:"status"`
 	GradeRange  string `form:"gradeRange" json:"gradeRange"`
 	Description string `form:"description" json:"description"`
 }
@@ -37,7 +37,7 @@ func (r *EduCourseListRequest) Handler() func(db *gorm.DB) *gorm.DB {
 			db = db.Where("type = ?", r.Type)
 		}
 		if r.Status != nil {
-			db = db.Where("status = ?", *r.Status)
+			db = db.Where("status = ?", int8(*r.Status))
 		}
 		if r.GradeRange != "" {
 			db = db.Where("grade_range LIKE ?", "%"+r.GradeRange+"%")
@@ -57,9 +57,9 @@ type EduCourseAddRequest struct {
 	Type                string `form:"type" json:"type"`
 	GradeRange          string `form:"gradeRange" json:"gradeRange"`
 	DefaultTeachingMode string `form:"defaultTeachingMode" json:"defaultTeachingMode"`
-	RequiresRoom        *int8  `form:"requiresRoom" json:"requiresRoom"`
-	Status              *int8  `form:"status" json:"status"`
-	Sort                *int   `form:"sort" json:"sort"`
+	RequiresRoom        *FlexInt8 `form:"requiresRoom" json:"requiresRoom"`
+	Status              *FlexInt8 `form:"status" json:"status"`
+	Sort                *FlexInt `form:"sort" json:"sort"`
 	Description         string `form:"description" json:"description"`
 }
 
@@ -70,15 +70,15 @@ func (r *EduCourseAddRequest) Validate(c *gin.Context) error {
 // EduCourseUpdateRequest 更新课程/项目请求
 type EduCourseUpdateRequest struct {
 	Validator
-	ID                  uint   `form:"id" json:"id" validate:"required" message:"课程/项目ID不能为空"`
+	ID                  FlexUint `form:"id" json:"id" validate:"required" message:"课程/项目ID不能为空"`
 	Name                string `form:"name" json:"name" validate:"required" message:"课程/项目名称不能为空"`
 	Code                string `form:"code" json:"code" validate:"required" message:"课程/项目编码不能为空"`
 	Type                string `form:"type" json:"type"`
 	GradeRange          string `form:"gradeRange" json:"gradeRange"`
 	DefaultTeachingMode string `form:"defaultTeachingMode" json:"defaultTeachingMode"`
-	RequiresRoom        *int8  `form:"requiresRoom" json:"requiresRoom"`
-	Status              *int8  `form:"status" json:"status"`
-	Sort                *int   `form:"sort" json:"sort"`
+	RequiresRoom        *FlexInt8 `form:"requiresRoom" json:"requiresRoom"`
+	Status              *FlexInt8 `form:"status" json:"status"`
+	Sort                *FlexInt `form:"sort" json:"sort"`
 	Description         string `form:"description" json:"description"`
 }
 
@@ -89,7 +89,7 @@ func (r *EduCourseUpdateRequest) Validate(c *gin.Context) error {
 // EduCourseDeleteRequest 删除课程/项目请求
 type EduCourseDeleteRequest struct {
 	Validator
-	ID uint `form:"id" json:"id" validate:"required" message:"课程/项目ID不能为空"`
+	ID FlexUint `form:"id" json:"id" validate:"required" message:"课程/项目ID不能为空"`
 }
 
 func (r *EduCourseDeleteRequest) Validate(c *gin.Context) error {
@@ -99,7 +99,7 @@ func (r *EduCourseDeleteRequest) Validate(c *gin.Context) error {
 // EduCourseGetRequest 获取课程/项目请求
 type EduCourseGetRequest struct {
 	Validator
-	ID uint `form:"id" uri:"id" json:"id" validate:"required" message:"课程/项目ID不能为空"`
+	ID FlexUint `form:"id" uri:"id" json:"id" validate:"required" message:"课程/项目ID不能为空"`
 }
 
 func (r *EduCourseGetRequest) Validate(c *gin.Context) error {
@@ -113,9 +113,9 @@ type EduCourseImportRow struct {
 	Type                string `json:"type" form:"type"`
 	GradeRange          string `json:"gradeRange" form:"gradeRange"`
 	DefaultTeachingMode string `json:"defaultTeachingMode" form:"defaultTeachingMode"`
-	RequiresRoom        *int8  `json:"requiresRoom" form:"requiresRoom"`
-	Status              *int8  `json:"status" form:"status"`
-	Sort                *int   `json:"sort" form:"sort"`
+	RequiresRoom        *FlexInt8 `json:"requiresRoom" form:"requiresRoom"`
+	Status              *FlexInt8 `json:"status" form:"status"`
+	Sort                *FlexInt `json:"sort" form:"sort"`
 	Description         string `json:"description" form:"description"`
 }
 
@@ -148,7 +148,7 @@ func (r *EduCourseImportRequest) Validate(c *gin.Context) error {
 // EduCourseExportRequest 课程/项目导出请求
 type EduCourseExportRequest struct {
 	Validator
-	IDs []uint `form:"ids" json:"ids"`
+	IDs []FlexUint `form:"ids" json:"ids"`
 }
 
 func (r *EduCourseExportRequest) Validate(c *gin.Context) error {

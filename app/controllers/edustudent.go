@@ -45,7 +45,7 @@ func (ctl *EduStudentController) GetByID(c *gin.Context) {
 	}
 	student := models.NewEduStudent()
 	if err := student.Find(c, func(db *gorm.DB) *gorm.DB {
-		return db.Where("id = ? AND tenant_id = ?", req.ID, ctl.GetCurrentTenantID(c)).Preload("Contacts")
+		return db.Where("id = ? AND tenant_id = ?", uint(req.ID), ctl.GetCurrentTenantID(c)).Preload("Contacts")
 	}); err != nil {
 		ctl.FailAndAbort(c, "查询学生失败", err)
 	}
@@ -84,7 +84,7 @@ func (ctl *EduStudentController) Delete(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	if err := ctl.EduStudentService.Delete(c, ctl.RequireTenant(c), req.ID); err != nil {
+	if err := ctl.EduStudentService.Delete(c, ctl.RequireTenant(c), uint(req.ID)); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
 	ctl.SuccessWithMessage(c, "学生删除成功", nil)
@@ -107,11 +107,26 @@ func (ctl *EduStudentController) Export(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	rows, err := ctl.EduStudentService.ExportRows(c, ctl.RequireTenant(c), req.IDs)
+	ids := make([]uint, 0, len(req.IDs))
+	for _, id := range req.IDs {
+		ids = append(ids, uint(id))
+	}
+	rows, err := ctl.EduStudentService.ExportRows(c, ctl.RequireTenant(c), ids)
 	if err != nil {
 		ctl.FailAndAbort(c, "导出学生失败", err)
 	}
 	ctl.Success(c, gin.H{"list": rows})
+}
+
+func (ctl *EduStudentController) Options(c *gin.Context) {
+	tenantID := ctl.GetCurrentTenantID(c)
+	list := models.NewEduStudentList()
+	if err := list.Find(c, func(db *gorm.DB) *gorm.DB {
+		return db.Where("tenant_id = ? AND status = ?", tenantID, 1).Order("id desc")
+	}); err != nil {
+		ctl.FailAndAbort(c, "获取学生选项失败", err)
+	}
+	ctl.Success(c, gin.H{"list": list})
 }
 
 func buildStudentFromAddRequest(req *models.EduStudentAddRequest, tenantID, userID uint) *models.EduStudent {
@@ -136,7 +151,7 @@ func buildStudentFromAddRequest(req *models.EduStudentAddRequest, tenantID, user
 		TenantID:         tenantID,
 	}
 	if req.Status != nil {
-		student.Status = *req.Status
+		student.Status = int8(*req.Status)
 	}
 	for _, item := range req.Contacts {
 		student.Contacts = append(student.Contacts, buildStudentContact(item.Relation, item.Name, item.Phone, item.Remark, item.IsPrimary, item.CanPickup, tenantID, userID))
@@ -146,7 +161,7 @@ func buildStudentFromAddRequest(req *models.EduStudentAddRequest, tenantID, user
 
 func buildStudentFromUpdateRequest(req *models.EduStudentUpdateRequest, tenantID, userID uint) *models.EduStudent {
 	student := &models.EduStudent{
-		BaseModel:        models.BaseModel{ID: req.ID},
+		BaseModel:        models.BaseModel{ID: uint(req.ID)},
 		Name:             req.Name,
 		Gender:           req.Gender,
 		Birthday:         req.Birthday,
@@ -167,7 +182,7 @@ func buildStudentFromUpdateRequest(req *models.EduStudentUpdateRequest, tenantID
 		TenantID:         tenantID,
 	}
 	if req.Status != nil {
-		student.Status = *req.Status
+		student.Status = int8(*req.Status)
 	}
 	for _, item := range req.Contacts {
 		student.Contacts = append(student.Contacts, buildStudentContact(item.Relation, item.Name, item.Phone, item.Remark, item.IsPrimary, item.CanPickup, tenantID, userID))
@@ -175,7 +190,7 @@ func buildStudentFromUpdateRequest(req *models.EduStudentUpdateRequest, tenantID
 	return student
 }
 
-func buildStudentContact(relation, name, phone, remark string, isPrimary, canPickup *int8, tenantID, userID uint) *models.EduStudentContact {
+func buildStudentContact(relation, name, phone, remark string, isPrimary, canPickup *models.FlexInt8, tenantID, userID uint) *models.EduStudentContact {
 	contact := &models.EduStudentContact{
 		Relation:  relation,
 		Name:      name,
@@ -185,10 +200,10 @@ func buildStudentContact(relation, name, phone, remark string, isPrimary, canPic
 		TenantID:  tenantID,
 	}
 	if isPrimary != nil {
-		contact.IsPrimary = *isPrimary
+		contact.IsPrimary = int8(*isPrimary)
 	}
 	if canPickup != nil {
-		contact.CanPickup = *canPickup
+		contact.CanPickup = int8(*canPickup)
 	}
 	return contact
 }

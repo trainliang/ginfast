@@ -128,8 +128,8 @@ func TestEduBenefitServiceRepairScheduleEligibilityAfterRenewal(t *testing.T) {
 
 	result, err := svc.RepairScheduleEligibility(ctx, &models.EduBenefitRepairRequest{
 		TenantID:      uintPtr(1),
-		StudentID:     uintPtr(1),
-		CourseID:      uintPtr(1),
+		StudentID:     flexUintPtr(1),
+		CourseID:      flexUintPtr(1),
 		EffectiveFrom: &models.JSONTime{Time: now.Add(-time.Hour)},
 	})
 	if err != nil {
@@ -164,8 +164,8 @@ func TestEduBenefitServiceRepairDefaultsToFutureEligibilityRows(t *testing.T) {
 
 	result, err := svc.RepairScheduleEligibility(ctx, &models.EduBenefitRepairRequest{
 		TenantID:  uintPtr(1),
-		StudentID: uintPtr(1),
-		CourseID:  uintPtr(1),
+		StudentID: flexUintPtr(1),
+		CourseID:  flexUintPtr(1),
 	})
 	if err != nil {
 		t.Fatalf("repair schedule eligibility: %v", err)
@@ -187,6 +187,11 @@ func TestEduBenefitServiceRepairDefaultsToFutureEligibilityRows(t *testing.T) {
 }
 
 func uintPtr(v uint) *uint { return &v }
+
+func flexUintPtr(v uint) *models.FlexUint {
+	value := models.FlexUint(v)
+	return &value
+}
 
 func seedBenefitProduct(t *testing.T, db *gorm.DB, tenantID, id, codeID uint, benefitType, calculationMode string, totalCount, validDays int) {
 	t.Helper()

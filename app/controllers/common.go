@@ -23,10 +23,9 @@ func (c Common) Fail(ctx *gin.Context, msg string, err error, data ...interface{
 // FailAndAbort 失败并自动终止执行，无需手动 return ，支持可变参数：第一个参数为HTTP状态码（默认400）, 第二个参数为业务状态码, 第三个参数为响应数据
 func (c Common) FailAndAbort(ctx *gin.Context, msg string, err error, data ...interface{}) {
 	if err != nil {
-		// 使用 %+v 格式化输出 pkg/errors 捕获的完整调用栈
-		app.ZapLog.Error(msg, zap.String("error", fmt.Sprintf("%+v", err)))
+		app.ZapLog.Warn(msg, zap.String("error", fmt.Sprintf("%+v", err)))
 	} else {
-		app.ZapLog.Error(msg, zap.Error(errors.New(msg)))
+		app.ZapLog.Warn(msg, zap.Error(errors.New(msg)))
 	}
 	app.Response.Fail(ctx, msg, data...)
 	if err != nil {

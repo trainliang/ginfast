@@ -44,7 +44,7 @@ func (ctl *EduClassController) GetByID(c *gin.Context) {
 	}
 	class := models.NewEduClass()
 	if err := class.Find(c, func(db *gorm.DB) *gorm.DB {
-		return db.Where("id = ? AND tenant_id = ?", req.ID, ctl.GetCurrentTenantID(c))
+		return db.Where("id = ? AND tenant_id = ?", uint(req.ID), ctl.GetCurrentTenantID(c))
 	}); err != nil {
 		ctl.FailAndAbort(c, "查询班级失败", err)
 	}
@@ -83,7 +83,7 @@ func (ctl *EduClassController) Delete(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	if err := ctl.EduClassService.Delete(c, ctl.RequireTenant(c), req.ID); err != nil {
+	if err := ctl.EduClassService.Delete(c, ctl.RequireTenant(c), uint(req.ID)); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
 	ctl.SuccessWithMessage(c, "班级删除成功", nil)
@@ -97,7 +97,8 @@ func (ctl *EduClassController) Members(c *gin.Context) {
 	if classID, err := parseOptionalPathUint(c, "id"); err != nil {
 		ctl.FailAndAbort(c, "班级ID格式错误", err)
 	} else if classID > 0 {
-		req.ClassID = &classID
+		flexClassID := models.FlexUint(classID)
+		req.ClassID = &flexClassID
 	}
 	tenantID := ctl.GetCurrentTenantID(c)
 	scope := func(db *gorm.DB) *gorm.DB { return db.Where("tenant_id = ?", tenantID) }
@@ -141,10 +142,21 @@ func (ctl *EduClassController) DeleteMember(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	if err := ctl.EduClassService.DeleteMember(c, ctl.RequireTenant(c), req.ID); err != nil {
+	if err := ctl.EduClassService.DeleteMember(c, ctl.RequireTenant(c), uint(req.ID)); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
 	ctl.SuccessWithMessage(c, "班级成员删除成功", nil)
+}
+
+func (ctl *EduClassController) Options(c *gin.Context) {
+	tenantID := ctl.GetCurrentTenantID(c)
+	list := models.NewEduClassList()
+	if err := list.Find(c, func(db *gorm.DB) *gorm.DB {
+		return db.Where("tenant_id = ? AND status = ?", tenantID, 1).Order("id desc")
+	}); err != nil {
+		ctl.FailAndAbort(c, "获取班级选项失败", err)
+	}
+	ctl.Success(c, gin.H{"list": list})
 }
 
 func (ctl *EduClassController) TeacherOptions(c *gin.Context) {
@@ -168,7 +180,11 @@ func (ctl *EduClassController) SaveTeacherRoleConfig(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	if err := ctl.EduClassService.SaveTeacherRoleConfig(c, ctl.RequireTenant(c), req.RoleIDs, ctl.GetCurrentUserID(c)); err != nil {
+	roleIDs := make([]uint, 0, len(req.RoleIDs))
+	for _, id := range req.RoleIDs {
+		roleIDs = append(roleIDs, uint(id))
+	}
+	if err := ctl.EduClassService.SaveTeacherRoleConfig(c, ctl.RequireTenant(c), roleIDs, ctl.GetCurrentUserID(c)); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
 	ctl.SuccessWithMessage(c, "教师角色配置保存成功", nil)
@@ -203,7 +219,11 @@ func (ctl *EduClassController) Export(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	rows, err := ctl.EduClassService.ExportRows(c, ctl.RequireTenant(c), req.IDs)
+	ids := make([]uint, 0, len(req.IDs))
+	for _, id := range req.IDs {
+		ids = append(ids, uint(id))
+	}
+	rows, err := ctl.EduClassService.ExportRows(c, ctl.RequireTenant(c), ids)
 	if err != nil {
 		ctl.FailAndAbort(c, "导出班级失败", err)
 	}
@@ -215,7 +235,11 @@ func (ctl *EduClassController) ExportMembers(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	rows, err := ctl.EduClassService.ExportMemberRows(c, ctl.RequireTenant(c), req.IDs)
+	ids := make([]uint, 0, len(req.IDs))
+	for _, id := range req.IDs {
+		ids = append(ids, uint(id))
+	}
+	rows, err := ctl.EduClassService.ExportMemberRows(c, ctl.RequireTenant(c), ids)
 	if err != nil {
 		ctl.FailAndAbort(c, "导出班级成员失败", err)
 	}
@@ -223,33 +247,33 @@ func (ctl *EduClassController) ExportMembers(c *gin.Context) {
 }
 
 func buildClassFromAddRequest(req *models.EduClassAddRequest, tenantID, userID uint) *models.EduClass {
-	class := &models.EduClass{Name: req.Name, Code: req.Code, ClassType: req.ClassType, CourseID: req.CourseID, TeacherID: req.TeacherID, Capacity: req.Capacity, BenefitCheckPolicy: req.BenefitCheckPolicy, Status: 1, StartDate: req.StartDate, EndDate: req.EndDate, Remark: req.Remark, CreatedBy: userID, TenantID: tenantID}
+	class := &models.EduClass{Name: req.Name, Code: req.Code, ClassType: req.ClassType, CourseID: uint(req.CourseID), TeacherID: uint(req.TeacherID), Capacity: int(req.Capacity), BenefitCheckPolicy: req.BenefitCheckPolicy, Status: 1, StartDate: req.StartDate, EndDate: req.EndDate, Remark: req.Remark, CreatedBy: userID, TenantID: tenantID}
 	if req.RoomID != nil {
-		class.RoomID = *req.RoomID
+		class.RoomID = uint(*req.RoomID)
 	}
 	if req.Status != nil {
-		class.Status = *req.Status
+		class.Status = int8(*req.Status)
 	}
 	return class
 }
 
 func buildClassFromUpdateRequest(req *models.EduClassUpdateRequest, tenantID, userID uint) *models.EduClass {
-	class := &models.EduClass{BaseModel: models.BaseModel{ID: req.ID}, Name: req.Name, Code: req.Code, ClassType: req.ClassType, CourseID: req.CourseID, TeacherID: req.TeacherID, Capacity: req.Capacity, BenefitCheckPolicy: req.BenefitCheckPolicy, Status: 1, StartDate: req.StartDate, EndDate: req.EndDate, Remark: req.Remark, CreatedBy: userID, TenantID: tenantID}
+	class := &models.EduClass{BaseModel: models.BaseModel{ID: uint(req.ID)}, Name: req.Name, Code: req.Code, ClassType: req.ClassType, CourseID: uint(req.CourseID), TeacherID: uint(req.TeacherID), Capacity: int(req.Capacity), BenefitCheckPolicy: req.BenefitCheckPolicy, Status: 1, StartDate: req.StartDate, EndDate: req.EndDate, Remark: req.Remark, CreatedBy: userID, TenantID: tenantID}
 	if req.RoomID != nil {
-		class.RoomID = *req.RoomID
+		class.RoomID = uint(*req.RoomID)
 	}
 	if req.Status != nil {
-		class.Status = *req.Status
+		class.Status = int8(*req.Status)
 	}
 	return class
 }
 
 func buildClassMemberFromAddRequest(req *models.EduClassMemberAddRequest, tenantID, userID uint) *models.EduClassMember {
-	return &models.EduClassMember{ClassID: req.ClassID, StudentID: req.StudentID, JoinDate: req.JoinDate, LeaveDate: req.LeaveDate, Status: req.Status, Remark: req.Remark, CreatedBy: userID, TenantID: tenantID}
+	return &models.EduClassMember{ClassID: uint(req.ClassID), StudentID: uint(req.StudentID), JoinDate: req.JoinDate, LeaveDate: req.LeaveDate, Status: req.Status, Remark: req.Remark, CreatedBy: userID, TenantID: tenantID}
 }
 
 func buildClassMemberFromUpdateRequest(req *models.EduClassMemberUpdateRequest, tenantID, userID uint) *models.EduClassMember {
-	return &models.EduClassMember{BaseModel: models.BaseModel{ID: req.ID}, ClassID: req.ClassID, StudentID: req.StudentID, JoinDate: req.JoinDate, LeaveDate: req.LeaveDate, Status: req.Status, Remark: req.Remark, CreatedBy: userID, TenantID: tenantID}
+	return &models.EduClassMember{BaseModel: models.BaseModel{ID: uint(req.ID)}, ClassID: uint(req.ClassID), StudentID: uint(req.StudentID), JoinDate: req.JoinDate, LeaveDate: req.LeaveDate, Status: req.Status, Remark: req.Remark, CreatedBy: userID, TenantID: tenantID}
 }
 
 func parseOptionalPathUint(c *gin.Context, key string) (uint, error) {

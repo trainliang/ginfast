@@ -25,7 +25,7 @@ func (s *EduRoomService) ValidateEduRoomWeeklyRules(rows []models.EduRoomWeeklyR
 	}
 	var slots []slot
 	for _, row := range rows {
-		if row.Available != 1 {
+		if int8(row.Available) != 1 {
 			continue
 		}
 		start, err := parseHHMM(row.StartTime)
@@ -39,7 +39,7 @@ func (s *EduRoomService) ValidateEduRoomWeeklyRules(rows []models.EduRoomWeeklyR
 		if end <= start {
 			return errors.New("结束时间必须晚于开始时间")
 		}
-		slots = append(slots, slot{roomID: row.RoomID, weekday: row.Weekday, start: start, end: end})
+		slots = append(slots, slot{roomID: uint(row.RoomID), weekday: int8(row.Weekday), start: start, end: end})
 	}
 	for i := range slots {
 		for j := i + 1; j < len(slots); j++ {
@@ -142,8 +142,8 @@ func (s *EduRoomService) SaveWeeklyRules(ctx context.Context, tenantID uint, row
 	err := app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		roomIDs := make(map[uint]bool)
 		for _, row := range rows {
-			if row.RoomID > 0 {
-				roomIDs[row.RoomID] = true
+			if uint(row.RoomID) > 0 {
+				roomIDs[uint(row.RoomID)] = true
 			}
 		}
 		for roomID := range roomIDs {
@@ -155,8 +155,8 @@ func (s *EduRoomService) SaveWeeklyRules(ctx context.Context, tenantID uint, row
 			}
 		}
 		for _, row := range rows {
-			rule := models.EduRoomWeeklyRule{RoomID: row.RoomID, Weekday: row.Weekday, StartTime: row.StartTime, EndTime: row.EndTime, Available: row.Available, Remark: row.Remark, TenantID: tenantID}
-			if row.Available == 0 {
+			rule := models.EduRoomWeeklyRule{RoomID: uint(row.RoomID), Weekday: int8(row.Weekday), StartTime: row.StartTime, EndTime: row.EndTime, Available: int8(row.Available), Remark: row.Remark, TenantID: tenantID}
+			if int8(row.Available) == 0 {
 				rule.Available = 0
 			}
 			if err := tx.Create(&rule).Error; err != nil {
@@ -246,14 +246,14 @@ func (s *EduRoomService) ImportRows(ctx context.Context, tenantID uint, rows []m
 					Name:     row.Name,
 					Code:     strings.TrimSpace(row.Code),
 					Type:     row.Type,
-					Capacity: row.Capacity,
+					Capacity: int(row.Capacity),
 					Location: row.Location,
 					Status:   1,
 					Remark:   row.Remark,
 					TenantID: tenantID,
 				}
 				if row.Status != nil {
-					room.Status = *row.Status
+					room.Status = int8(*row.Status)
 				}
 				if err := tx.Create(&room).Error; err != nil {
 					return err
@@ -263,11 +263,11 @@ func (s *EduRoomService) ImportRows(ctx context.Context, tenantID uint, rows []m
 			}
 			room.Name = row.Name
 			room.Type = row.Type
-			room.Capacity = row.Capacity
+			room.Capacity = int(row.Capacity)
 			room.Location = row.Location
 			room.Remark = row.Remark
 			if row.Status != nil {
-				room.Status = *row.Status
+				room.Status = int8(*row.Status)
 			}
 			if err := tx.Save(&room).Error; err != nil {
 				return err
@@ -297,11 +297,11 @@ func (s *EduRoomService) ImportWeeklyRows(ctx context.Context, tenantID uint, ro
 		}
 		for i, row := range rows {
 			rowNum := i + 1
-			if err := ensureRoomBelongsToTenant(tx, tenantID, row.RoomID); err != nil {
+			if err := ensureRoomBelongsToTenant(tx, tenantID, uint(row.RoomID)); err != nil {
 				result.Errors = append(result.Errors, EduImportRowError{Row: rowNum, Field: "roomId", Reason: err.Error()})
 				continue
 			}
-			rule := models.EduRoomWeeklyRule{RoomID: row.RoomID, Weekday: row.Weekday, StartTime: row.StartTime, EndTime: row.EndTime, Available: row.Available, Remark: row.Remark, TenantID: tenantID}
+			rule := models.EduRoomWeeklyRule{RoomID: uint(row.RoomID), Weekday: int8(row.Weekday), StartTime: row.StartTime, EndTime: row.EndTime, Available: int8(row.Available), Remark: row.Remark, TenantID: tenantID}
 			if err := tx.Create(&rule).Error; err != nil {
 				return err
 			}
@@ -335,11 +335,11 @@ func (s *EduRoomService) ImportExceptionRows(ctx context.Context, tenantID uint,
 				result.Errors = append(result.Errors, EduImportRowError{Row: rowNum, Field: "type", Reason: "不能为空"})
 				continue
 			}
-			if err := ensureRoomBelongsToTenant(tx, tenantID, row.RoomID); err != nil {
+			if err := ensureRoomBelongsToTenant(tx, tenantID, uint(row.RoomID)); err != nil {
 				result.Errors = append(result.Errors, EduImportRowError{Row: rowNum, Field: "roomId", Reason: err.Error()})
 				continue
 			}
-			exception := models.EduRoomException{RoomID: row.RoomID, ExceptionDate: row.ExceptionDate, Type: row.Type, StartTime: row.StartTime, EndTime: row.EndTime, Reason: row.Reason, TenantID: tenantID}
+			exception := models.EduRoomException{RoomID: uint(row.RoomID), ExceptionDate: row.ExceptionDate, Type: row.Type, StartTime: row.StartTime, EndTime: row.EndTime, Reason: row.Reason, TenantID: tenantID}
 			if err := tx.Create(&exception).Error; err != nil {
 				return err
 			}

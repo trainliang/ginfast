@@ -59,7 +59,7 @@ func TestEduStatisticsServiceTeacherMinutesCountsScheduledAndCompletedOnly(t *te
 		Status:       "canceled",
 	})
 
-	resp, err := svc.ScheduleStatistics(ctx, &models.EduStatisticsRangeRequest{TeacherID: uintPtr(1)})
+	resp, err := svc.ScheduleStatistics(ctx, &models.EduStatisticsRangeRequest{TeacherID: models.FlexString("1")})
 	if err != nil {
 		t.Fatalf("schedule statistics: %v", err)
 	}
@@ -121,7 +121,7 @@ func TestEduStatisticsServiceRoomUsageRequiresRoomAndRoomID(t *testing.T) {
 		Status:       "scheduled",
 	})
 
-	resp, err := svc.ScheduleStatistics(ctx, &models.EduStatisticsRangeRequest{RoomID: uintPtr(1)})
+	resp, err := svc.ScheduleStatistics(ctx, &models.EduStatisticsRangeRequest{RoomID: models.FlexString("1")})
 	if err != nil {
 		t.Fatalf("schedule statistics: %v", err)
 	}

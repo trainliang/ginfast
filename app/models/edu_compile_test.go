@@ -46,7 +46,10 @@ func TestEduScheduleBenefitFoundationModelsCompile(t *testing.T) {
 
 func TestEduScheduleModelsCompile(t *testing.T) {
 	_ = &EduScheduleRule{}
+	_ = &EduScheduleRuleWeekday{}
 	_ = &EduLesson{}
 	_ = &EduLessonChangeLog{}
 	_ = &EduScheduleConflictOverride{}
+	_ = &EduLessonCompletionRule{}
+	_ = &EduLessonStudentCompletion{}
 }

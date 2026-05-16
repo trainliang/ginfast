@@ -9,12 +9,12 @@ import (
 type EduBenefitProductListRequest struct {
 	BasePaging
 	Validator
-	ID              *uint  `form:"id" json:"id"`
-	Name            string `form:"name" json:"name"`
-	Code            string `form:"code" json:"code"`
-	BenefitType     string `form:"benefitType" json:"benefitType"`
-	CalculationMode string `form:"calculationMode" json:"calculationMode"`
-	Status          *int8  `form:"status" json:"status"`
+	ID              *FlexUint `form:"id" json:"id"`
+	Name            string    `form:"name" json:"name"`
+	Code            string    `form:"code" json:"code"`
+	BenefitType     string    `form:"benefitType" json:"benefitType"`
+	CalculationMode string    `form:"calculationMode" json:"calculationMode"`
+	Status          *FlexInt8 `form:"status" json:"status"`
 }
 
 func (r *EduBenefitProductListRequest) Validate(c *gin.Context) error {
@@ -28,9 +28,9 @@ type EduBenefitProductAddRequest struct {
 	Code            string `form:"code" json:"code" validate:"required" message:"权益产品编码不能为空"`
 	BenefitType     string `form:"benefitType" json:"benefitType"`
 	CalculationMode string `form:"calculationMode" json:"calculationMode"`
-	TotalCount      int    `form:"totalCount" json:"totalCount"`
-	ValidDays       int    `form:"validDays" json:"validDays"`
-	Status          *int8  `form:"status" json:"status"`
+	TotalCount      FlexInt `form:"totalCount" json:"totalCount"`
+	ValidDays       FlexInt `form:"validDays" json:"validDays"`
+	Status          *FlexInt8 `form:"status" json:"status"`
 	Remark          string `form:"remark" json:"remark"`
 }
 
@@ -41,14 +41,14 @@ func (r *EduBenefitProductAddRequest) Validate(c *gin.Context) error {
 // EduBenefitProductUpdateRequest 更新权益产品请求
 type EduBenefitProductUpdateRequest struct {
 	Validator
-	ID              uint   `form:"id" json:"id" validate:"required" message:"权益产品ID不能为空"`
+	ID              FlexUint `form:"id" json:"id" validate:"required" message:"权益产品ID不能为空"`
 	Name            string `form:"name" json:"name" validate:"required" message:"权益产品名称不能为空"`
 	Code            string `form:"code" json:"code" validate:"required" message:"权益产品编码不能为空"`
 	BenefitType     string `form:"benefitType" json:"benefitType"`
 	CalculationMode string `form:"calculationMode" json:"calculationMode"`
-	TotalCount      int    `form:"totalCount" json:"totalCount"`
-	ValidDays       int    `form:"validDays" json:"validDays"`
-	Status          *int8  `form:"status" json:"status"`
+	TotalCount      FlexInt `form:"totalCount" json:"totalCount"`
+	ValidDays       FlexInt `form:"validDays" json:"validDays"`
+	Status          *FlexInt8 `form:"status" json:"status"`
 	Remark          string `form:"remark" json:"remark"`
 }
 
@@ -59,7 +59,7 @@ func (r *EduBenefitProductUpdateRequest) Validate(c *gin.Context) error {
 // EduBenefitProductDeleteRequest 删除权益产品请求
 type EduBenefitProductDeleteRequest struct {
 	Validator
-	ID uint `form:"id" json:"id" validate:"required" message:"权益产品ID不能为空"`
+	ID FlexUint `form:"id" json:"id" validate:"required" message:"权益产品ID不能为空"`
 }
 
 func (r *EduBenefitProductDeleteRequest) Validate(c *gin.Context) error {
@@ -69,7 +69,7 @@ func (r *EduBenefitProductDeleteRequest) Validate(c *gin.Context) error {
 func (r *EduBenefitProductListRequest) Handler() func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		if r.ID != nil {
-			db = db.Where("id = ?", *r.ID)
+			db = db.Where("id = ?", uint(*r.ID))
 		}
 		if r.Name != "" {
 			db = db.Where("name LIKE ?", "%"+r.Name+"%")
@@ -84,7 +84,7 @@ func (r *EduBenefitProductListRequest) Handler() func(db *gorm.DB) *gorm.DB {
 			db = db.Where("calculation_mode = ?", r.CalculationMode)
 		}
 		if r.Status != nil {
-			db = db.Where("status = ?", *r.Status)
+			db = db.Where("status = ?", int8(*r.Status))
 		}
 		return db
 	}
@@ -94,15 +94,15 @@ func (r *EduBenefitProductListRequest) Handler() func(db *gorm.DB) *gorm.DB {
 type EduStudentBenefitListRequest struct {
 	BasePaging
 	Validator
-	ID              *uint  `form:"id" json:"id"`
-	StudentID       *uint  `form:"studentId" json:"studentId"`
-	ProductID       *uint  `form:"productId" json:"productId"`
-	BenefitType     string `form:"benefitType" json:"benefitType"`
-	CalculationMode string `form:"calculationMode" json:"calculationMode"`
-	CourseID        *uint  `form:"courseId" json:"courseId"`
-	ClassID         *uint  `form:"classId" json:"classId"`
-	TeacherID       *uint  `form:"teacherId" json:"teacherId"`
-	Status          *int8  `form:"status" json:"status"`
+	ID              *FlexUint `form:"id" json:"id"`
+	StudentID       *FlexUint `form:"studentId" json:"studentId"`
+	ProductID       *FlexUint `form:"productId" json:"productId"`
+	BenefitType     string    `form:"benefitType" json:"benefitType"`
+	CalculationMode string    `form:"calculationMode" json:"calculationMode"`
+	CourseID        *FlexUint `form:"courseId" json:"courseId"`
+	ClassID         *FlexUint `form:"classId" json:"classId"`
+	TeacherID       *FlexUint `form:"teacherId" json:"teacherId"`
+	Status          *FlexInt8 `form:"status" json:"status"`
 }
 
 func (r *EduStudentBenefitListRequest) Validate(c *gin.Context) error {
@@ -112,19 +112,19 @@ func (r *EduStudentBenefitListRequest) Validate(c *gin.Context) error {
 // EduStudentBenefitAddRequest 新增学生权益请求
 type EduStudentBenefitAddRequest struct {
 	Validator
-	StudentID       uint      `form:"studentId" json:"studentId" validate:"required" message:"学生ID不能为空"`
-	ProductID       uint      `form:"productId" json:"productId"`
+	StudentID       FlexUint  `form:"studentId" json:"studentId" validate:"required" message:"学生ID不能为空"`
+	ProductID       FlexUint  `form:"productId" json:"productId"`
 	BenefitType     string    `form:"benefitType" json:"benefitType"`
 	CalculationMode string    `form:"calculationMode" json:"calculationMode"`
-	CourseID        uint      `form:"courseId" json:"courseId" validate:"required" message:"课程ID不能为空"`
-	ClassID         uint      `form:"classId" json:"classId"`
-	TeacherID       uint      `form:"teacherId" json:"teacherId"`
+	CourseID        FlexUint  `form:"courseId" json:"courseId" validate:"required" message:"课程ID不能为空"`
+	ClassID         FlexUint  `form:"classId" json:"classId"`
+	TeacherID       FlexUint  `form:"teacherId" json:"teacherId"`
 	ValidFrom       *JSONTime `form:"validFrom" json:"validFrom"`
 	ValidTo         *JSONTime `form:"validTo" json:"validTo"`
-	TotalCount      int       `form:"totalCount" json:"totalCount"`
-	UsedCount       int       `form:"usedCount" json:"usedCount"`
-	RemainingCount  int       `form:"remainingCount" json:"remainingCount"`
-	Status          *int8     `form:"status" json:"status"`
+	TotalCount      FlexInt   `form:"totalCount" json:"totalCount"`
+	UsedCount       FlexInt   `form:"usedCount" json:"usedCount"`
+	RemainingCount  FlexInt   `form:"remainingCount" json:"remainingCount"`
+	Status          *FlexInt8 `form:"status" json:"status"`
 	SourceType      string    `form:"sourceType" json:"sourceType"`
 }
 
@@ -135,20 +135,20 @@ func (r *EduStudentBenefitAddRequest) Validate(c *gin.Context) error {
 // EduStudentBenefitUpdateRequest 更新学生权益请求
 type EduStudentBenefitUpdateRequest struct {
 	Validator
-	ID              uint      `form:"id" json:"id" validate:"required" message:"学生权益ID不能为空"`
-	StudentID       uint      `form:"studentId" json:"studentId" validate:"required" message:"学生ID不能为空"`
-	ProductID       uint      `form:"productId" json:"productId"`
+	ID              FlexUint  `form:"id" json:"id" validate:"required" message:"学生权益ID不能为空"`
+	StudentID       FlexUint  `form:"studentId" json:"studentId" validate:"required" message:"学生ID不能为空"`
+	ProductID       FlexUint  `form:"productId" json:"productId"`
 	BenefitType     string    `form:"benefitType" json:"benefitType"`
 	CalculationMode string    `form:"calculationMode" json:"calculationMode"`
-	CourseID        uint      `form:"courseId" json:"courseId" validate:"required" message:"课程ID不能为空"`
-	ClassID         uint      `form:"classId" json:"classId"`
-	TeacherID       uint      `form:"teacherId" json:"teacherId"`
+	CourseID        FlexUint  `form:"courseId" json:"courseId" validate:"required" message:"课程ID不能为空"`
+	ClassID         FlexUint  `form:"classId" json:"classId"`
+	TeacherID       FlexUint  `form:"teacherId" json:"teacherId"`
 	ValidFrom       *JSONTime `form:"validFrom" json:"validFrom"`
 	ValidTo         *JSONTime `form:"validTo" json:"validTo"`
-	TotalCount      int       `form:"totalCount" json:"totalCount"`
-	UsedCount       int       `form:"usedCount" json:"usedCount"`
-	RemainingCount  int       `form:"remainingCount" json:"remainingCount"`
-	Status          *int8     `form:"status" json:"status"`
+	TotalCount      FlexInt   `form:"totalCount" json:"totalCount"`
+	UsedCount       FlexInt   `form:"usedCount" json:"usedCount"`
+	RemainingCount  FlexInt   `form:"remainingCount" json:"remainingCount"`
+	Status          *FlexInt8 `form:"status" json:"status"`
 	SourceType      string    `form:"sourceType" json:"sourceType"`
 }
 
@@ -160,11 +160,11 @@ func (r *EduStudentBenefitUpdateRequest) Validate(c *gin.Context) error {
 type EduBenefitLedgerListRequest struct {
 	BasePaging
 	Validator
-	ID               *uint  `form:"id" json:"id"`
-	StudentBenefitID *uint  `form:"studentBenefitId" json:"studentBenefitId"`
-	StudentID        *uint  `form:"studentId" json:"studentId"`
-	ActionType       string `form:"actionType" json:"actionType"`
-	BizType          string `form:"bizType" json:"bizType"`
+	ID               *FlexUint `form:"id" json:"id"`
+	StudentBenefitID *FlexUint `form:"studentBenefitId" json:"studentBenefitId"`
+	StudentID        *FlexUint `form:"studentId" json:"studentId"`
+	ActionType       string    `form:"actionType" json:"actionType"`
+	BizType          string    `form:"bizType" json:"bizType"`
 }
 
 func (r *EduBenefitLedgerListRequest) Validate(c *gin.Context) error {
@@ -174,13 +174,13 @@ func (r *EduBenefitLedgerListRequest) Validate(c *gin.Context) error {
 func (r *EduBenefitLedgerListRequest) Handler() func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		if r.ID != nil {
-			db = db.Where("id = ?", *r.ID)
+			db = db.Where("id = ?", uint(*r.ID))
 		}
 		if r.StudentBenefitID != nil {
-			db = db.Where("student_benefit_id = ?", *r.StudentBenefitID)
+			db = db.Where("student_benefit_id = ?", uint(*r.StudentBenefitID))
 		}
 		if r.StudentID != nil {
-			db = db.Where("student_id = ?", *r.StudentID)
+			db = db.Where("student_id = ?", uint(*r.StudentID))
 		}
 		if r.ActionType != "" {
 			db = db.Where("action_type = ?", r.ActionType)
@@ -196,12 +196,12 @@ func (r *EduBenefitLedgerListRequest) Handler() func(db *gorm.DB) *gorm.DB {
 type EduBenefitExternalSyncListRequest struct {
 	BasePaging
 	Validator
-	ID               *uint  `form:"id" json:"id"`
-	StudentBenefitID *uint  `form:"studentBenefitId" json:"studentBenefitId"`
-	StudentID        *uint  `form:"studentId" json:"studentId"`
-	ProviderCode     string `form:"providerCode" json:"providerCode"`
-	IdempotencyKey   string `form:"idempotencyKey" json:"idempotencyKey"`
-	Status           string `form:"status" json:"status"`
+	ID               *FlexUint `form:"id" json:"id"`
+	StudentBenefitID *FlexUint `form:"studentBenefitId" json:"studentBenefitId"`
+	StudentID        *FlexUint `form:"studentId" json:"studentId"`
+	ProviderCode     string    `form:"providerCode" json:"providerCode"`
+	IdempotencyKey   string    `form:"idempotencyKey" json:"idempotencyKey"`
+	Status           string    `form:"status" json:"status"`
 }
 
 func (r *EduBenefitExternalSyncListRequest) Validate(c *gin.Context) error {
@@ -211,13 +211,13 @@ func (r *EduBenefitExternalSyncListRequest) Validate(c *gin.Context) error {
 func (r *EduBenefitExternalSyncListRequest) Handler() func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		if r.ID != nil {
-			db = db.Where("id = ?", *r.ID)
+			db = db.Where("id = ?", uint(*r.ID))
 		}
 		if r.StudentBenefitID != nil {
-			db = db.Where("student_benefit_id = ?", *r.StudentBenefitID)
+			db = db.Where("student_benefit_id = ?", uint(*r.StudentBenefitID))
 		}
 		if r.StudentID != nil {
-			db = db.Where("student_id = ?", *r.StudentID)
+			db = db.Where("student_id = ?", uint(*r.StudentID))
 		}
 		if r.ProviderCode != "" {
 			db = db.Where("provider_code = ?", r.ProviderCode)
@@ -235,7 +235,7 @@ func (r *EduBenefitExternalSyncListRequest) Handler() func(db *gorm.DB) *gorm.DB
 // EduBenefitExternalSyncRetryRequest 外部同步重试请求
 type EduBenefitExternalSyncRetryRequest struct {
 	Validator
-	ID uint `form:"id" json:"id" validate:"required" message:"外部同步任务ID不能为空"`
+	ID FlexUint `form:"id" json:"id" validate:"required" message:"外部同步任务ID不能为空"`
 }
 
 func (r *EduBenefitExternalSyncRetryRequest) Validate(c *gin.Context) error {
@@ -245,13 +245,13 @@ func (r *EduBenefitExternalSyncRetryRequest) Validate(c *gin.Context) error {
 func (r *EduStudentBenefitListRequest) Handler() func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
 		if r.ID != nil {
-			db = db.Where("id = ?", *r.ID)
+			db = db.Where("id = ?", uint(*r.ID))
 		}
 		if r.StudentID != nil {
-			db = db.Where("student_id = ?", *r.StudentID)
+			db = db.Where("student_id = ?", uint(*r.StudentID))
 		}
 		if r.ProductID != nil {
-			db = db.Where("product_id = ?", *r.ProductID)
+			db = db.Where("product_id = ?", uint(*r.ProductID))
 		}
 		if r.BenefitType != "" {
 			db = db.Where("benefit_type = ?", r.BenefitType)
@@ -260,16 +260,16 @@ func (r *EduStudentBenefitListRequest) Handler() func(db *gorm.DB) *gorm.DB {
 			db = db.Where("calculation_mode = ?", r.CalculationMode)
 		}
 		if r.CourseID != nil {
-			db = db.Where("course_id = ?", *r.CourseID)
+			db = db.Where("course_id = ?", uint(*r.CourseID))
 		}
 		if r.ClassID != nil {
-			db = db.Where("class_id = ?", *r.ClassID)
+			db = db.Where("class_id = ?", uint(*r.ClassID))
 		}
 		if r.TeacherID != nil {
-			db = db.Where("teacher_id = ?", *r.TeacherID)
+			db = db.Where("teacher_id = ?", uint(*r.TeacherID))
 		}
 		if r.Status != nil {
-			db = db.Where("status = ?", *r.Status)
+			db = db.Where("status = ?", int8(*r.Status))
 		}
 		return db
 	}
@@ -279,10 +279,10 @@ func (r *EduStudentBenefitListRequest) Handler() func(db *gorm.DB) *gorm.DB {
 type EduBenefitCheckRequest struct {
 	Validator
 	TenantID  *uint     `json:"tenantID" form:"tenantID"`
-	StudentID uint      `json:"studentId" form:"studentId" validate:"required" message:"学生ID不能为空"`
-	CourseID  uint      `json:"courseId" form:"courseId" validate:"required" message:"课程ID不能为空"`
-	ClassID   uint      `json:"classId" form:"classId"`
-	TeacherID uint      `json:"teacherId" form:"teacherId"`
+	StudentID FlexUint  `json:"studentId" form:"studentId" validate:"required" message:"学生ID不能为空"`
+	CourseID  FlexUint  `json:"courseId" form:"courseId" validate:"required" message:"课程ID不能为空"`
+	ClassID   FlexUint  `json:"classId" form:"classId"`
+	TeacherID FlexUint  `json:"teacherId" form:"teacherId"`
 	CheckedAt *JSONTime `json:"checkedAt" form:"checkedAt"`
 }
 
@@ -302,8 +302,8 @@ type EduBenefitCheckResult struct {
 type EduBenefitRepairRequest struct {
 	Validator
 	TenantID      *uint     `json:"tenantID" form:"tenantID"`
-	StudentID     *uint     `json:"studentId" form:"studentId"`
-	CourseID      *uint     `json:"courseId" form:"courseId"`
+	StudentID     *FlexUint `json:"studentId" form:"studentId"`
+	CourseID      *FlexUint `json:"courseId" form:"courseId"`
 	EffectiveFrom *JSONTime `json:"effectiveFrom" form:"effectiveFrom"`
 }
 

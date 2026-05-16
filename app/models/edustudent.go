@@ -19,6 +19,7 @@ type EduStudent struct {
 	School           string                `gorm:"column:school;size:128;comment:就读学校" json:"school"`
 	Grade            string                `gorm:"column:grade;size:64;comment:年级" json:"grade"`
 	SchoolClass      string                `gorm:"column:school_class;size:64;comment:原班级" json:"schoolClass"`
+	StudentType      string                `gorm:"column:student_type;size:32;default:formal;comment:学生类型" json:"studentType"`
 	SourceChannel    string                `gorm:"column:source_channel;size:64;comment:来源渠道" json:"sourceChannel"`
 	EnrollDate       *JSONTime             `gorm:"column:enroll_date;comment:报名日期" json:"enrollDate"`
 	HealthNote       string                `gorm:"column:health_note;size:500;comment:健康说明" json:"healthNote"`

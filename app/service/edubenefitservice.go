@@ -35,7 +35,7 @@ func (s *EduBenefitService) CheckEligibility(ctx context.Context, req *models.Ed
 	if err != nil {
 		return nil, err
 	}
-	if req.StudentID == 0 || req.CourseID == 0 {
+	if uint(req.StudentID) == 0 || uint(req.CourseID) == 0 {
 		return nil, errors.New("学生ID和课程ID不能为空")
 	}
 	checkedAt := time.Now().UTC()
@@ -45,7 +45,7 @@ func (s *EduBenefitService) CheckEligibility(ctx context.Context, req *models.Ed
 
 	var benefits []models.EduStudentBenefit
 	err = app.DB().WithContext(ctx).
-		Where("tenant_id = ? AND student_id = ? AND course_id = ? AND status = 1 AND benefit_type = ?", tenantID, req.StudentID, req.CourseID, "course").
+		Where("tenant_id = ? AND student_id = ? AND course_id = ? AND status = 1 AND benefit_type = ?", tenantID, uint(req.StudentID), uint(req.CourseID), "course").
 		Order("id asc").
 		Find(&benefits).Error
 	if err != nil {
@@ -59,7 +59,7 @@ func (s *EduBenefitService) CheckEligibility(ctx context.Context, req *models.Ed
 	var insufficientResult *models.EduBenefitCheckResult
 	for i := range benefits {
 		benefit := benefits[i]
-		if !studentBenefitMatchesDimension(&benefit, req.ClassID, req.TeacherID) {
+		if !studentBenefitMatchesDimension(&benefit, uint(req.ClassID), uint(req.TeacherID)) {
 			continue
 		}
 		if benefit.ValidFrom != nil && checkedAt.Before(benefit.ValidFrom.Time) {
@@ -124,10 +124,10 @@ func (s *EduBenefitService) RepairScheduleEligibility(ctx context.Context, req *
 		Where("eligibility_status IN ?", []string{"ineligible", "warn"}).
 		Where("resolved_at IS NULL")
 	if req.StudentID != nil {
-		query = query.Where("student_id = ?", *req.StudentID)
+		query = query.Where("student_id = ?", uint(*req.StudentID))
 	}
 	if req.CourseID != nil {
-		query = query.Where("course_id = ?", *req.CourseID)
+		query = query.Where("course_id = ?", uint(*req.CourseID))
 	}
 	effectiveFrom := time.Now().UTC()
 	if req.EffectiveFrom != nil && !req.EffectiveFrom.Time.IsZero() {
@@ -147,10 +147,10 @@ func (s *EduBenefitService) RepairScheduleEligibility(ctx context.Context, req *
 		result.CheckedCount++
 		check, err := s.CheckEligibility(ctx, &models.EduBenefitCheckRequest{
 			TenantID:  &tenantID,
-			StudentID: row.StudentID,
-			CourseID:  row.CourseID,
-			ClassID:   row.ClassID,
-			TeacherID: 0,
+			StudentID: models.FlexUint(row.StudentID),
+			CourseID:  models.FlexUint(row.CourseID),
+			ClassID:   models.FlexUint(row.ClassID),
+			TeacherID: models.FlexUint(0),
 			CheckedAt: row.CheckedAt,
 		})
 		if err != nil {

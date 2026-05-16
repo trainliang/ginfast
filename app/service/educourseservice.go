@@ -139,14 +139,14 @@ func (s *EduCourseService) ImportRows(ctx context.Context, tenantID uint, rows [
 					TenantID:            tenantID,
 				}
 				if row.RequiresRoom != nil {
-					course.RequiresRoom = *row.RequiresRoom
+					course.RequiresRoom = int8(*row.RequiresRoom)
 				}
 				normalizeTeachingMode(&course)
 				if row.Status != nil {
-					course.Status = *row.Status
+					course.Status = int8(*row.Status)
 				}
 				if row.Sort != nil {
-					course.Sort = *row.Sort
+					course.Sort = int(*row.Sort)
 				}
 				desiredMode := course.DefaultTeachingMode
 				desiredRequiresRoom := course.RequiresRoom
@@ -170,10 +170,10 @@ func (s *EduCourseService) ImportRows(ctx context.Context, tenantID uint, rows [
 			applyTeachingModeImportRow(&course, row)
 			course.Description = row.Description
 			if row.Status != nil {
-				course.Status = *row.Status
+				course.Status = int8(*row.Status)
 			}
 			if row.Sort != nil {
-				course.Sort = *row.Sort
+				course.Sort = int(*row.Sort)
 			}
 			if err := tx.Save(&course).Error; err != nil {
 				return err
@@ -261,7 +261,7 @@ func applyTeachingModeImportRow(course *models.EduCourse, row models.EduCourseIm
 		course.DefaultTeachingMode = row.DefaultTeachingMode
 	}
 	if row.RequiresRoom != nil {
-		course.RequiresRoom = *row.RequiresRoom
+		course.RequiresRoom = int8(*row.RequiresRoom)
 	}
 	if strings.TrimSpace(row.DefaultTeachingMode) != "" || row.RequiresRoom != nil {
 		normalizeTeachingMode(course)

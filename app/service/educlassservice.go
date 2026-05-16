@@ -215,7 +215,7 @@ func (s *EduClassService) ImportRows(ctx context.Context, tenantID uint, rows []
 				result.Errors = append(result.Errors, EduImportRowError{Row: i + 1, Field: "capacity", Reason: "必须大于 0"})
 				continue
 			}
-			if err := validateClassReferences(tx, tenantID, row.CourseID, row.TeacherID, roomIDOrZero(row.RoomID)); err != nil {
+			if err := validateClassReferences(tx, tenantID, uint(row.CourseID), uint(row.TeacherID), flexRoomIDOrZero(row.RoomID)); err != nil {
 				result.Errors = append(result.Errors, EduImportRowError{Row: i + 1, Field: "reference", Reason: err.Error()})
 				continue
 			}
@@ -230,12 +230,12 @@ func (s *EduClassService) ImportRows(ctx context.Context, tenantID uint, rows []
 				return err
 			}
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				class = models.EduClass{Name: row.Name, Code: row.Code, ClassType: row.ClassType, CourseID: row.CourseID, TeacherID: row.TeacherID, Capacity: row.Capacity, BenefitCheckPolicy: row.BenefitCheckPolicy, TenantID: tenantID}
+				class = models.EduClass{Name: row.Name, Code: row.Code, ClassType: row.ClassType, CourseID: uint(row.CourseID), TeacherID: uint(row.TeacherID), Capacity: int(row.Capacity), BenefitCheckPolicy: row.BenefitCheckPolicy, TenantID: tenantID}
 				if row.RoomID != nil {
-					class.RoomID = *row.RoomID
+					class.RoomID = uint(*row.RoomID)
 				}
 				if row.Status != nil {
-					class.Status = *row.Status
+					class.Status = int8(*row.Status)
 				}
 				normalizeBenefitCheckPolicy(&class)
 				if err := tx.Create(&class).Error; err != nil {
@@ -246,18 +246,18 @@ func (s *EduClassService) ImportRows(ctx context.Context, tenantID uint, rows []
 			}
 			class.Name = row.Name
 			class.ClassType = row.ClassType
-			class.CourseID = row.CourseID
-			class.TeacherID = row.TeacherID
-			class.Capacity = row.Capacity
+			class.CourseID = uint(row.CourseID)
+			class.TeacherID = uint(row.TeacherID)
+			class.Capacity = int(row.Capacity)
 			if strings.TrimSpace(row.BenefitCheckPolicy) != "" {
 				class.BenefitCheckPolicy = row.BenefitCheckPolicy
 				normalizeBenefitCheckPolicy(&class)
 			}
 			if row.RoomID != nil {
-				class.RoomID = *row.RoomID
+				class.RoomID = uint(*row.RoomID)
 			}
 			if row.Status != nil {
-				class.Status = *row.Status
+				class.Status = int8(*row.Status)
 			}
 			if err := tx.Save(&class).Error; err != nil {
 				return err
@@ -277,7 +277,7 @@ func (s *EduClassService) ImportMemberRows(ctx context.Context, tenantID uint, r
 	}
 	err := app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for i, row := range rows {
-			member := &models.EduClassMember{ClassID: row.ClassID, StudentID: row.StudentID, Status: row.Status, TenantID: tenantID}
+			member := &models.EduClassMember{ClassID: uint(row.ClassID), StudentID: uint(row.StudentID), Status: row.Status, TenantID: tenantID}
 			if err := s.saveMemberTx(tx, member, false); err != nil {
 				result.Errors = append(result.Errors, EduImportRowError{Row: i + 1, Field: "member", Reason: err.Error()})
 				continue
@@ -334,6 +334,13 @@ func mergeBenefitCheckPolicyForUpdate(class *models.EduClass, current *models.Ed
 		return
 	}
 	normalizeBenefitCheckPolicy(class)
+}
+
+func flexRoomIDOrZero(id *models.FlexUint) uint {
+	if id == nil {
+		return 0
+	}
+	return uint(*id)
 }
 
 func (s *EduClassService) ExportMemberRows(ctx context.Context, tenantID uint, ids []uint) ([]models.EduClassMemberExportRow, error) {

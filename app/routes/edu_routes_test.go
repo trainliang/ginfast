@@ -49,7 +49,7 @@ func (fakeRouteCasbin) StopAutoLoadPolicy()                                     
 func (fakeRouteCasbin) PrefixDomain(uint) string                                  { return "domain_1" }
 
 func TestEduControllersAreRegistered(t *testing.T) {
-	if eduStudentControllers == nil || eduCourseControllers == nil || eduClassControllers == nil || eduRoomControllers == nil || eduTermControllers == nil || eduBenefitControllers == nil || eduScheduleControllers == nil || eduStatisticsControllers == nil {
+	if eduStudentControllers == nil || eduCourseControllers == nil || eduClassControllers == nil || eduRoomControllers == nil || eduTermControllers == nil || eduBenefitControllers == nil || eduScheduleControllers == nil || eduStatisticsControllers == nil || eduLessonCompletionControllers == nil {
 		t.Fatal("edu controllers have nil registrations")
 	}
 }
@@ -101,6 +101,12 @@ func TestEduRoutes(t *testing.T) {
 		"GET /api/edu/statistics/schedule",
 		"GET /api/edu/statistics/benefits",
 		"GET /api/edu/statistics/external-sync",
+		"GET /api/edu/lesson-completion/rules",
+		"PUT /api/edu/lesson-completion/rules",
+		"GET /api/edu/lessons/:id/completions",
+		"POST /api/edu/lessons/:id/completions",
+		"POST /api/edu/lessons/:id/completions/:studentId/revoke",
+		"POST /api/edu/lessons/:id/complete",
 	}
 	for _, route := range want {
 		if !got[route] {

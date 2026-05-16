@@ -237,6 +237,87 @@ func TestPostgreSQLSchemaIncludesEduScheduleCompletionPatch(t *testing.T) {
 	}
 }
 
+func TestPostgreSQLSchemaIncludesEduLessonCompletionFrontendPatch(t *testing.T) {
+	sqlBytes, err := os.ReadFile("patches/2026-05-12-edu-lesson-completion-frontend-postgresql.sql")
+	if err != nil {
+		t.Fatalf("read edu lesson completion frontend patch: %v", err)
+	}
+	sqlText := string(sqlBytes)
+
+	requiredSnippets := []string{
+		"INSERT INTO sys_menu (id, parent_id, path, name, redirect, component, title, is_full, hide, disable, keep_alive, affix, link, iframe, svg_icon, icon, sort, type, is_link, permission, created_at, updated_at, deleted_at, created_by) VALUES",
+		"'消课管理'",
+		"'/edu/lesson-completion'",
+		"'EduLessonCompletion'",
+		"'/edu/lesson-completion/rules'",
+		"'/edu/lesson-completion/rules'",
+		"'edu/lesson-completion/rules'",
+		"'消课规则'",
+		"'/edu/lesson-completion/lessons'",
+		"'edu/lesson-completion/lessons'",
+		"'课次消课'",
+		"'edu:lessonCompletion:rule'",
+		"'edu:lessonCompletion:view'",
+		"'edu:lessonCompletion:rule:save'",
+		"'edu:lessonCompletion:submit'",
+		"'edu:lessonCompletion:revoke'",
+		"'edu:lessonCompletion:complete'",
+		"INSERT INTO sys_role_menu (role_id, menu_id)",
+		"INSERT INTO sys_menu_api (menu_id, api_id) VALUES",
+		"INSERT INTO sys_casbin_rule (ptype, v0, v1, v2, v3, v4, v5)",
+		"redirect = EXCLUDED.redirect",
+		"UPDATE sys_tenants",
+		"SELECT setval('sys_menu_id_seq'",
+	}
+
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(sqlText, snippet) {
+			t.Fatalf("edu lesson completion frontend patch missing required snippet: %s", snippet)
+		}
+	}
+}
+
+func TestPostgreSQLSchemaIncludesEduScheduleMultiWeekdayPatch(t *testing.T) {
+	sqlBytes, err := os.ReadFile("patches/2026-05-12-edu-schedule-multi-weekday-postgresql.sql")
+	if err != nil {
+		t.Fatalf("read edu schedule multi weekday patch: %v", err)
+	}
+	sqlText := string(sqlBytes)
+
+	requiredSnippets := []string{
+		"CREATE TABLE IF NOT EXISTS edu_schedule_rule_weekday",
+		"weekday SMALLINT NOT NULL",
+		"CREATE UNIQUE INDEX IF NOT EXISTS idx_edu_schedule_rule_weekday_unique",
+		"INSERT INTO edu_schedule_rule_weekday",
+		"ON CONFLICT DO NOTHING",
+		"ALTER TABLE edu_schedule_rule DROP COLUMN IF EXISTS weekday",
+	}
+
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(sqlText, snippet) {
+			t.Fatalf("edu schedule multi weekday patch missing required snippet: %s", snippet)
+		}
+	}
+}
+
+func TestPostgreSQLSchemaIncludesEduStudentTypePatch(t *testing.T) {
+	sqlBytes, err := os.ReadFile("patches/2026-05-15-edu-student-type-postgresql.sql")
+	if err != nil {
+		t.Fatalf("read edu student type patch: %v", err)
+	}
+	sqlText := string(sqlBytes)
+
+	requiredSnippets := []string{
+		"ALTER TABLE edu_student ADD COLUMN IF NOT EXISTS student_type VARCHAR(32) DEFAULT 'formal'",
+	}
+
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(sqlText, snippet) {
+			t.Fatalf("edu student type patch missing required snippet: %s", snippet)
+		}
+	}
+}
+
 func TestPostgreSQLConvertedIncludesEducationFoundationSeed(t *testing.T) {
 	sqlBytes, err := os.ReadFile("postgresql_converted.sql")
 	if err != nil {

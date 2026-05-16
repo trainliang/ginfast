@@ -1,14 +1,56 @@
 package models
 
+import "github.com/gin-gonic/gin"
+
 // EduStatisticsRangeRequest 统计范围请求
 type EduStatisticsRangeRequest struct {
-	StartDate *JSONTime `json:"startDate" form:"startDate"`
-	EndDate   *JSONTime `json:"endDate" form:"endDate"`
-	TeacherID *uint     `json:"teacherId" form:"teacherId"`
-	RoomID    *uint     `json:"roomId" form:"roomId"`
-	ClassID   *uint     `json:"classId" form:"classId"`
-	StudentID *uint     `json:"studentId" form:"studentId"`
-	CourseID  *uint     `json:"courseId" form:"courseId"`
+	Validator
+	StartDate *JSONTime  `json:"startDate" form:"startDate"`
+	EndDate   *JSONTime  `json:"endDate" form:"endDate"`
+	TeacherID FlexString `json:"teacherId" form:"teacherId"`
+	RoomID    FlexString `json:"roomId" form:"roomId"`
+	ClassID   FlexString `json:"classId" form:"classId"`
+	StudentID FlexString `json:"studentId" form:"studentId"`
+	CourseID  FlexString `json:"courseId" form:"courseId"`
+}
+
+func (r *EduStatisticsRangeRequest) Validate(c *gin.Context) error {
+	return r.Validator.Check(c, r)
+}
+
+func (r *EduStatisticsRangeRequest) GetTeacherIDUint() uint {
+	if r == nil {
+		return 0
+	}
+	return StringToUint(string(r.TeacherID))
+}
+
+func (r *EduStatisticsRangeRequest) GetRoomIDUint() uint {
+	if r == nil {
+		return 0
+	}
+	return StringToUint(string(r.RoomID))
+}
+
+func (r *EduStatisticsRangeRequest) GetClassIDUint() uint {
+	if r == nil {
+		return 0
+	}
+	return StringToUint(string(r.ClassID))
+}
+
+func (r *EduStatisticsRangeRequest) GetStudentIDUint() uint {
+	if r == nil {
+		return 0
+	}
+	return StringToUint(string(r.StudentID))
+}
+
+func (r *EduStatisticsRangeRequest) GetCourseIDUint() uint {
+	if r == nil {
+		return 0
+	}
+	return StringToUint(string(r.CourseID))
 }
 
 // EduTeacherLessonSummary 教师课时汇总

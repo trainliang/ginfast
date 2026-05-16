@@ -27,20 +27,20 @@ func (s *EduStatisticsService) ScheduleStatistics(ctx context.Context, req *mode
 		if req.EndDate != nil && !req.EndDate.Time.IsZero() {
 			query = query.Where("lesson_date <= ?", req.EndDate.Time)
 		}
-		if req.TeacherID != nil && *req.TeacherID != 0 {
-			query = query.Where("teacher_id = ?", *req.TeacherID)
+		if req.GetTeacherIDUint() != 0 {
+			query = query.Where("teacher_id = ?", req.GetTeacherIDUint())
 		}
-		if req.RoomID != nil && *req.RoomID != 0 {
-			query = query.Where("room_id = ?", *req.RoomID)
+		if req.GetRoomIDUint() != 0 {
+			query = query.Where("room_id = ?", req.GetRoomIDUint())
 		}
-		if req.ClassID != nil && *req.ClassID != 0 {
-			query = query.Where("class_id = ?", *req.ClassID)
+		if req.GetClassIDUint() != 0 {
+			query = query.Where("class_id = ?", req.GetClassIDUint())
 		}
-		if req.StudentID != nil && *req.StudentID != 0 {
-			query = query.Where("student_id = ?", *req.StudentID)
+		if req.GetStudentIDUint() != 0 {
+			query = query.Where("student_id = ?", req.GetStudentIDUint())
 		}
-		if req.CourseID != nil && *req.CourseID != 0 {
-			query = query.Where("course_id = ?", *req.CourseID)
+		if req.GetCourseIDUint() != 0 {
+			query = query.Where("course_id = ?", req.GetCourseIDUint())
 		}
 	}
 
@@ -194,11 +194,11 @@ func (s *EduStatisticsService) BenefitStatistics(ctx context.Context, req *model
 	var benefits []models.EduStudentBenefit
 	query := app.DB().WithContext(ctx).Model(&models.EduStudentBenefit{}).Where("tenant_id = ?", tenantID)
 	if req != nil {
-		if req.StudentID != nil && *req.StudentID != 0 {
-			query = query.Where("student_id = ?", *req.StudentID)
+		if req.GetStudentIDUint() != 0 {
+			query = query.Where("student_id = ?", req.GetStudentIDUint())
 		}
-		if req.CourseID != nil && *req.CourseID != 0 {
-			query = query.Where("course_id = ?", *req.CourseID)
+		if req.GetCourseIDUint() != 0 {
+			query = query.Where("course_id = ?", req.GetCourseIDUint())
 		}
 	}
 	if err := query.Find(&benefits).Error; err != nil {
@@ -242,8 +242,8 @@ func (s *EduStatisticsService) ExternalSyncStatistics(ctx context.Context, req *
 	}
 	query := app.DB().WithContext(ctx).Model(&models.EduBenefitExternalSync{}).Where("tenant_id = ?", tenantID)
 	if req != nil {
-		if req.StudentID != nil && *req.StudentID != 0 {
-			query = query.Where("student_id = ?", *req.StudentID)
+		if req.GetStudentIDUint() != 0 {
+			query = query.Where("student_id = ?", req.GetStudentIDUint())
 		}
 	}
 	rows := make([]struct {

@@ -169,6 +169,7 @@ func (s *EduStudentService) ExportRows(ctx context.Context, tenantID uint, ids [
 			School:           item.School,
 			Grade:            item.Grade,
 			SchoolClass:      item.SchoolClass,
+			StudentType:      item.StudentType,
 			SourceChannel:    item.SourceChannel,
 			EnrollDate:       item.EnrollDate,
 			HealthNote:       item.HealthNote,

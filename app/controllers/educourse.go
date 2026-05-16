@@ -95,13 +95,13 @@ func (ctl *EduCourseController) Add(c *gin.Context) {
 		course.DefaultTeachingMode = req.DefaultTeachingMode
 	}
 	if req.RequiresRoom != nil {
-		course.RequiresRoom = *req.RequiresRoom
+		course.RequiresRoom = int8(*req.RequiresRoom)
 	}
 	if req.Status != nil {
-		course.Status = *req.Status
+		course.Status = int8(*req.Status)
 	}
 	if req.Sort != nil {
-		course.Sort = *req.Sort
+		course.Sort = int(*req.Sort)
 	}
 	if err := ctl.EduCourseService.Create(c, course); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
@@ -117,7 +117,7 @@ func (ctl *EduCourseController) Update(c *gin.Context) {
 	}
 	tenantID := ctl.RequireTenant(c)
 	course := &models.EduCourse{
-		BaseModel:    models.BaseModel{ID: req.ID},
+		BaseModel:    models.BaseModel{ID: uint(req.ID)},
 		Name:         req.Name,
 		Code:         req.Code,
 		Type:         req.Type,
@@ -132,13 +132,13 @@ func (ctl *EduCourseController) Update(c *gin.Context) {
 		course.DefaultTeachingMode = req.DefaultTeachingMode
 	}
 	if req.RequiresRoom != nil {
-		course.RequiresRoom = *req.RequiresRoom
+		course.RequiresRoom = int8(*req.RequiresRoom)
 	}
 	if req.Status != nil {
-		course.Status = *req.Status
+		course.Status = int8(*req.Status)
 	}
 	if req.Sort != nil {
-		course.Sort = *req.Sort
+		course.Sort = int(*req.Sort)
 	}
 	if err := ctl.EduCourseService.Update(c, course); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
@@ -152,7 +152,7 @@ func (ctl *EduCourseController) Delete(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	if err := ctl.EduCourseService.Delete(c, ctl.RequireTenant(c), req.ID); err != nil {
+	if err := ctl.EduCourseService.Delete(c, ctl.RequireTenant(c), uint(req.ID)); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
 	ctl.SuccessWithMessage(c, "课程/项目删除成功", nil)
@@ -177,7 +177,11 @@ func (ctl *EduCourseController) Export(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	rows, err := ctl.EduCourseService.ExportRows(c, ctl.RequireTenant(c), req.IDs)
+	ids := make([]uint, 0, len(req.IDs))
+	for _, id := range req.IDs {
+		ids = append(ids, uint(id))
+	}
+	rows, err := ctl.EduCourseService.ExportRows(c, ctl.RequireTenant(c), ids)
 	if err != nil {
 		ctl.FailAndAbort(c, "导出课程/项目失败", err)
 	}

@@ -18,16 +18,195 @@ type EduScheduleService struct{}
 
 func NewEduScheduleService() *EduScheduleService { return &EduScheduleService{} }
 
+func weekdaySet(values []int8) map[int8]struct{} {
+	result := map[int8]struct{}{}
+	for _, value := range values {
+		if value >= 1 && value <= 7 {
+			result[value] = struct{}{}
+		}
+	}
+	return result
+}
+
+func normalizeWeekdays(repeatType string, weekdays []int8) ([]int8, error) {
+	if strings.TrimSpace(repeatType) != "weekly" {
+		return nil, nil
+	}
+	seen := map[int8]struct{}{}
+	result := make([]int8, 0, len(weekdays))
+	for _, weekday := range weekdays {
+		if weekday < 1 || weekday > 7 {
+			return nil, errors.New("weekdays 存在非法值")
+		}
+		if _, ok := seen[weekday]; ok {
+			continue
+		}
+		seen[weekday] = struct{}{}
+		result = append(result, weekday)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i] < result[j] })
+	if len(result) == 0 {
+		return nil, errors.New("weekly 规则未选择上课日")
+	}
+	return result, nil
+}
+
+func replaceRuleWeekdaysTx(tx *gorm.DB, tenantID, ruleID uint, weekdays []int8) error {
+	if err := requireTenant(tx.Unscoped().Where("rule_id = ?", ruleID), tenantID).Delete(&models.EduScheduleRuleWeekday{}).Error; err != nil {
+		return err
+	}
+	if len(weekdays) == 0 {
+		return nil
+	}
+	rows := make([]models.EduScheduleRuleWeekday, 0, len(weekdays))
+	for _, weekday := range weekdays {
+		rows = append(rows, models.EduScheduleRuleWeekday{RuleID: ruleID, Weekday: weekday, TenantID: tenantID})
+	}
+	return tx.Create(&rows).Error
+}
+
+func (s *EduScheduleService) loadRuleWeekdaysForRuleTx(tx *gorm.DB, tenantID uint, rule *models.EduScheduleRule) error {
+	if rule == nil || rule.ID == 0 {
+		return nil
+	}
+	var rows []models.EduScheduleRuleWeekday
+	if err := requireTenant(tx.Model(&models.EduScheduleRuleWeekday{}), tenantID).Where("rule_id = ?", rule.ID).Order("weekday asc").Find(&rows).Error; err != nil {
+		return err
+	}
+	rule.Weekdays = rule.Weekdays[:0]
+	for _, row := range rows {
+		rule.Weekdays = append(rule.Weekdays, row.Weekday)
+	}
+	return nil
+}
+
+func (s *EduScheduleService) loadRuleWeekdaysTx(tx *gorm.DB, tenantID uint, rules []models.EduScheduleRule) error {
+	if len(rules) == 0 {
+		return nil
+	}
+	ids := make([]uint, 0, len(rules))
+	index := make(map[uint]int, len(rules))
+	for i := range rules {
+		ids = append(ids, rules[i].ID)
+		index[rules[i].ID] = i
+	}
+	var rows []models.EduScheduleRuleWeekday
+	if err := requireTenant(tx.Model(&models.EduScheduleRuleWeekday{}), tenantID).Where("rule_id IN ?", ids).Order("weekday asc").Find(&rows).Error; err != nil {
+		return err
+	}
+	for _, row := range rows {
+		if i, ok := index[row.RuleID]; ok {
+			rules[i].Weekdays = append(rules[i].Weekdays, row.Weekday)
+		}
+	}
+	return nil
+}
+
+func (s *EduScheduleService) ListRulesWithWeekdays(ctx context.Context, tenantID uint, req *models.EduScheduleRuleListRequest) ([]models.EduScheduleRule, error) {
+	var rows []models.EduScheduleRule
+	db := requireTenant(app.DB().WithContext(ctx).Model(&models.EduScheduleRule{}), tenantID)
+	if req != nil {
+		if string(req.ID) != "" {
+			db = db.Where("id = ?", req.GetIDUint())
+		}
+		if strings.TrimSpace(req.Name) != "" {
+			db = db.Where("name LIKE ?", "%"+strings.TrimSpace(req.Name)+"%")
+		}
+		if strings.TrimSpace(req.RuleType) != "" {
+			db = db.Where("rule_type = ?", strings.TrimSpace(req.RuleType))
+		}
+		if strings.TrimSpace(req.RepeatType) != "" {
+			db = db.Where("repeat_type = ?", strings.TrimSpace(req.RepeatType))
+		}
+		if string(req.ClassID) != "" {
+			db = db.Where("class_id = ?", req.GetClassIDUint())
+		}
+		if string(req.StudentID) != "" {
+			db = db.Where("student_id = ?", req.GetStudentIDUint())
+		}
+		if string(req.CourseID) != "" {
+			db = db.Where("course_id = ?", req.GetCourseIDUint())
+		}
+		if string(req.TeacherID) != "" {
+			db = db.Where("teacher_id = ?", req.GetTeacherIDUint())
+		}
+		if req.Status != nil {
+			db = db.Where("status = ?", *req.Status)
+		}
+		db = db.Scopes(req.Paginate())
+	}
+	if err := db.Order("id asc").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	if err := s.loadRuleWeekdaysTx(app.DB().WithContext(ctx), tenantID, rows); err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
 func (s *EduScheduleService) CreateRule(ctx context.Context, rule *models.EduScheduleRule) error {
-	return app.DB().WithContext(ctx).Create(rule).Error
+	if rule == nil {
+		return errors.New("规则不能为空")
+	}
+	normalized, err := normalizeWeekdays(rule.RepeatType, rule.Weekdays)
+	if err != nil {
+		return err
+	}
+	rule.Weekdays = normalized
+	operatorID := userIDFromContext(ctx)
+	if operatorID == 0 {
+		operatorID = rule.CreatedBy
+	}
+	return app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(rule).Error; err != nil {
+			return err
+		}
+		if err := replaceRuleWeekdaysTx(tx, rule.TenantID, rule.ID, rule.Weekdays); err != nil {
+			return err
+		}
+		if rule.Status != 1 {
+			return nil
+		}
+		_, err = s.generateLessonsForRuleTxWithDB(ctx, tx, rule, operatorID)
+		return err
+	})
 }
 
 func (s *EduScheduleService) UpdateRule(ctx context.Context, rule *models.EduScheduleRule) error {
-	return app.DB().WithContext(ctx).Save(rule).Error
+	if rule == nil {
+		return errors.New("规则不能为空")
+	}
+	normalized, err := normalizeWeekdays(rule.RepeatType, rule.Weekdays)
+	if err != nil {
+		return err
+	}
+	rule.Weekdays = normalized
+	operatorID := userIDFromContext(ctx)
+	if operatorID == 0 {
+		operatorID = rule.CreatedBy
+	}
+	return app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(rule).Error; err != nil {
+			return err
+		}
+		if err := replaceRuleWeekdaysTx(tx, rule.TenantID, rule.ID, rule.Weekdays); err != nil {
+			return err
+		}
+		if rule.Status != 1 {
+			return nil
+		}
+		_, err = s.regenerateFutureLessonsTx(ctx, tx, rule.TenantID, rule, operatorID)
+		return err
+	})
 }
 
 func (s *EduScheduleService) DeleteRule(ctx context.Context, tenantID, id uint) error {
-	return requireTenant(app.DB().WithContext(ctx).Where("id = ?", id), tenantID).Delete(&models.EduScheduleRule{}).Error
+	return app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := requireTenant(tx.Where("rule_id = ?", id), tenantID).Delete(&models.EduScheduleRuleWeekday{}).Error; err != nil {
+			return err
+		}
+		return requireTenant(tx.Where("id = ?", id), tenantID).Delete(&models.EduScheduleRule{}).Error
+	})
 }
 
 func (s *EduScheduleService) PreviewRuleChange(ctx context.Context, tenantID, id uint) ([]models.EduLesson, error) {
@@ -55,6 +234,9 @@ func (s *EduScheduleService) GenerateLessonsForRule(ctx context.Context, ruleID,
 	if err := requireTenant(app.DB().WithContext(ctx).Model(&models.EduScheduleRule{}), tenantID).Where("id = ?", ruleID).First(&rule).Error; err != nil {
 		return nil, err
 	}
+	if err := s.loadRuleWeekdaysForRuleTx(app.DB().WithContext(ctx), tenantID, &rule); err != nil {
+		return nil, err
+	}
 	return s.generateLessonsForRuleTxWithDB(ctx, app.DB().WithContext(ctx), &rule, operatorID)
 }
 
@@ -63,27 +245,42 @@ func (s *EduScheduleService) RegenerateFutureLessons(ctx context.Context, tenant
 	if err := requireTenant(app.DB().WithContext(ctx).Model(&models.EduScheduleRule{}), tenantID).Where("id = ?", ruleID).First(&rule).Error; err != nil {
 		return nil, err
 	}
+	if err := s.loadRuleWeekdaysForRuleTx(app.DB().WithContext(ctx), tenantID, &rule); err != nil {
+		return nil, err
+	}
 	if err := ensureTenantID(tenantID); err != nil {
 		return nil, err
 	}
-	if rule.EffectiveFrom == nil || rule.EffectiveFrom.Time.IsZero() {
-		return s.generateLessonsForRuleTxWithDB(ctx, app.DB().WithContext(ctx), &rule, operatorID)
+	return s.regenerateFutureLessonsTx(ctx, app.DB().WithContext(ctx), tenantID, &rule, operatorID)
+}
+
+func (s *EduScheduleService) regenerateFutureLessonsTx(ctx context.Context, db *gorm.DB, tenantID uint, rule *models.EduScheduleRule, operatorID uint) ([]models.EduLesson, error) {
+	if db == nil {
+		return nil, errors.New("数据库不能为空")
 	}
-	effectiveFrom := truncateDate(rule.EffectiveFrom.Time)
+	if rule == nil {
+		return nil, errors.New("规则不能为空")
+	}
+	effectiveFrom := time.Time{}
+	if rule.EffectiveFrom != nil && !rule.EffectiveFrom.Time.IsZero() {
+		effectiveFrom = truncateDate(rule.EffectiveFrom.Time)
+	}
 	newRuleVersion := rule.Version
 	if newRuleVersion < 1 {
 		newRuleVersion = 1
 	}
 
 	var generated []models.EduLesson
-	err := app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+	err := db.Transaction(func(tx *gorm.DB) error {
 		var replaceable []models.EduLesson
 		query := requireTenant(tx.Model(&models.EduLesson{}), tenantID).
-			Where("rule_id = ?", ruleID).
-			Where("lesson_date >= ?", effectiveFrom).
+			Where("rule_id = ?", rule.ID).
 			Where("status NOT IN ?", []string{"completed", "canceled", "stopped"}).
 			Where("is_manual_adjusted = 0").
 			Order("lesson_date asc, id asc")
+		if !effectiveFrom.IsZero() {
+			query = query.Where("lesson_date >= ?", effectiveFrom)
+		}
 		if err := query.Find(&replaceable).Error; err != nil {
 			return err
 		}
@@ -100,7 +297,7 @@ func (s *EduScheduleService) RegenerateFutureLessons(ctx context.Context, tenant
 				afterData := fmt.Sprintf("deleted_for_regeneration=true,rule_version=%d", newRuleVersion)
 				log := &models.EduLessonChangeLog{
 					LessonID:   lesson.ID,
-					RuleID:     ruleID,
+					RuleID:     rule.ID,
 					ActionType: "rule_regenerate",
 					BeforeData: beforeData,
 					AfterData:  afterData,
@@ -114,15 +311,19 @@ func (s *EduScheduleService) RegenerateFutureLessons(ctx context.Context, tenant
 				}
 			}
 		}
-		dates := make([]time.Time, 0, len(replaceable))
-		for _, lesson := range replaceable {
-			if lesson.LessonDate == nil || lesson.LessonDate.Time.IsZero() {
-				continue
-			}
-			dates = append(dates, truncateDate(lesson.LessonDate.Time))
-		}
 		rule.Version = newRuleVersion
-		created, err := s.generateLessonsForDatesTx(ctx, tx, &rule, operatorID, dates)
+		regenerateStart, regenerateEnd, err := s.resolveScheduleWindow(ctx, rule)
+		if err != nil {
+			return err
+		}
+		if !effectiveFrom.IsZero() && effectiveFrom.After(regenerateStart) {
+			regenerateStart = effectiveFrom
+		}
+		dates, err := s.buildLessonDates(ctx, rule, regenerateStart, regenerateEnd)
+		if err != nil {
+			return err
+		}
+		created, err := s.generateLessonsForDatesTx(ctx, tx, rule, operatorID, dates)
 		if err != nil {
 			return err
 		}
@@ -135,23 +336,23 @@ func (s *EduScheduleService) RegenerateFutureLessons(ctx context.Context, tenant
 func (s *EduScheduleService) ListLessons(ctx context.Context, tenantID uint, req *models.EduLessonListRequest) ([]models.EduLesson, error) {
 	db := requireTenant(app.DB().WithContext(ctx).Model(&models.EduLesson{}), tenantID)
 	if req != nil {
-		if req.ID != nil {
-			db = db.Where("id = ?", *req.ID)
+		if string(req.ID) != "" {
+			db = db.Where("id = ?", string(req.ID))
 		}
-		if req.RuleID != nil {
-			db = db.Where("rule_id = ?", *req.RuleID)
+		if string(req.RuleID) != "" {
+			db = db.Where("rule_id = ?", string(req.RuleID))
 		}
-		if req.ClassID != nil {
-			db = db.Where("class_id = ?", *req.ClassID)
+		if string(req.ClassID) != "" {
+			db = db.Where("class_id = ?", string(req.ClassID))
 		}
-		if req.StudentID != nil {
-			db = db.Where("student_id = ?", *req.StudentID)
+		if string(req.StudentID) != "" {
+			db = db.Where("student_id = ?", string(req.StudentID))
 		}
-		if req.CourseID != nil {
-			db = db.Where("course_id = ?", *req.CourseID)
+		if string(req.CourseID) != "" {
+			db = db.Where("course_id = ?", string(req.CourseID))
 		}
-		if req.TeacherID != nil {
-			db = db.Where("teacher_id = ?", *req.TeacherID)
+		if string(req.TeacherID) != "" {
+			db = db.Where("teacher_id = ?", string(req.TeacherID))
 		}
 		if strings.TrimSpace(req.Status) != "" {
 			db = db.Where("status = ?", req.Status)
@@ -170,11 +371,11 @@ func (s *EduScheduleService) CalendarLessons(ctx context.Context, tenantID uint,
 		if req.EndDate != nil && !req.EndDate.Time.IsZero() {
 			db = db.Where("lesson_date <= ?", req.EndDate.Time)
 		}
-		if req.TeacherID != nil {
-			db = db.Where("teacher_id = ?", *req.TeacherID)
+		if req.GetTeacherID() != "" {
+			db = db.Where("teacher_id = ?", req.GetTeacherIDUint())
 		}
-		if req.ClassID != nil {
-			db = db.Where("class_id = ?", *req.ClassID)
+		if req.GetClassID() != "" {
+			db = db.Where("class_id = ?", req.GetClassIDUint())
 		}
 	}
 	var rows []models.EduLesson
@@ -211,8 +412,8 @@ func (s *EduScheduleService) checkConflictsWithDB(ctx context.Context, db *gorm.
 	var lessons []models.EduLesson
 	query := requireTenant(db.Model(&models.EduLesson{}), tenantID).
 		Where("lesson_date = ? AND status = ?", truncateDate(req.LessonDate.Time), "scheduled")
-	if req.LessonID != 0 {
-		query = query.Where("id <> ?", req.LessonID)
+	if req.GetLessonID() != "" {
+		query = query.Where("id <> ?", req.GetLessonIDUint())
 	}
 	if err := query.Order("id asc").Find(&lessons).Error; err != nil {
 		return nil, err
@@ -231,10 +432,14 @@ func (s *EduScheduleService) checkConflictsWithDB(ctx context.Context, db *gorm.
 		if !(newStart < existingEnd && existingStart < newEnd) {
 			continue
 		}
-		appendConflict(result, seen, "teacher", fmt.Sprintf("%d", req.TeacherID), req.TeacherID != 0 && lesson.TeacherID == req.TeacherID)
-		appendConflict(result, seen, "room", fmt.Sprintf("%d", req.RoomID), req.RequiresRoom == 1 && req.RoomID != 0 && lesson.RequiresRoom == 1 && lesson.RoomID == req.RoomID)
-		appendConflict(result, seen, "student", fmt.Sprintf("%d", req.StudentID), req.StudentID != 0 && lesson.StudentID == req.StudentID)
-		appendConflict(result, seen, "class", fmt.Sprintf("%d", req.ClassID), req.ClassID != 0 && lesson.ClassID == req.ClassID)
+		teacherID := req.GetTeacherIDUint()
+		roomID := req.GetRoomIDUint()
+		studentID := req.GetStudentIDUint()
+		classID := req.GetClassIDUint()
+		appendConflict(result, seen, "teacher", fmt.Sprintf("%d", teacherID), teacherID != 0 && lesson.TeacherID == teacherID)
+		appendConflict(result, seen, "room", fmt.Sprintf("%d", roomID), req.RequiresRoom == 1 && roomID != 0 && lesson.RequiresRoom == 1 && lesson.RoomID == roomID)
+		appendConflict(result, seen, "student", fmt.Sprintf("%d", studentID), studentID != 0 && lesson.StudentID == studentID)
+		appendConflict(result, seen, "class", fmt.Sprintf("%d", classID), classID != 0 && lesson.ClassID == classID)
 	}
 	if !result.HasConflict {
 		return result, nil
@@ -248,12 +453,12 @@ func (s *EduScheduleService) checkConflictsWithDB(ctx context.Context, db *gorm.
 	now := models.NewJSONTime(time.Now().UTC())
 	for _, item := range result.Items {
 		override := &models.EduScheduleConflictOverride{
-			RuleID:       req.RuleID,
-			LessonID:     req.LessonID,
+			RuleID:       req.GetRuleIDUint(),
+			LessonID:     req.GetLessonIDUint(),
 			ConflictType: item.ConflictType,
 			ConflictKey:  item.ConflictKey,
 			Reason:       strings.TrimSpace(req.OverrideReason),
-			OperatorID:   req.OperatorID,
+			OperatorID:   req.GetOperatorIDUint(),
 			OccurredAt:   &now,
 			TenantID:     tenantID,
 		}
@@ -293,8 +498,9 @@ func (s *EduScheduleService) RescheduleLesson(ctx context.Context, tenantID uint
 	if newEnd <= newStart {
 		return errors.New("结束时间必须晚于开始时间")
 	}
+	roomIDStr := req.GetRoomID()
 	if strings.EqualFold(strings.TrimSpace(req.TeachingMode), "offline") {
-		if req.RoomID == nil || *req.RoomID == 0 {
+		if roomIDStr == "" || roomIDStr == "0" {
 			return errors.New("线下课需要场地")
 		}
 	}
@@ -302,7 +508,7 @@ func (s *EduScheduleService) RescheduleLesson(ctx context.Context, tenantID uint
 	var conflictResult *models.EduScheduleConflictCheckResult
 	err = app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var lesson models.EduLesson
-		if err := requireTenant(tx.Model(&models.EduLesson{}), tenantID).Where("id = ?", req.LessonID).First(&lesson).Error; err != nil {
+		if err := requireTenant(tx.Model(&models.EduLesson{}), tenantID).Where("id = ?", req.GetLessonIDUint()).First(&lesson).Error; err != nil {
 			return err
 		}
 		if strings.EqualFold(strings.TrimSpace(lesson.Status), "completed") {
@@ -312,34 +518,32 @@ func (s *EduScheduleService) RescheduleLesson(ctx context.Context, tenantID uint
 			return errors.New("当前课次状态不允许调课")
 		}
 
-		roomID := lesson.RoomID
+		roomIDUint := lesson.RoomID
 		requiresRoom := lesson.RequiresRoom
 		if strings.EqualFold(strings.TrimSpace(req.TeachingMode), "offline") {
 			requiresRoom = 1
-			if req.RoomID != nil {
-				roomID = *req.RoomID
-			}
+			roomIDUint = req.GetRoomIDUint()
 		} else {
 			requiresRoom = 0
-			roomID = 0
+			roomIDUint = 0
 		}
 
 		conflictResult, err = s.checkConflictsWithDB(ctx, tx, &models.EduScheduleConflictCheckRequest{
-			LessonID:              lesson.ID,
-			RuleID:                lesson.RuleID,
+			LessonID:              fmt.Sprintf("%d", lesson.ID),
+			RuleID:                models.FlexString(fmt.Sprintf("%d", lesson.RuleID)),
 			LessonDate:            newDate,
 			StartTime:             req.StartTime,
 			EndTime:               req.EndTime,
-			ClassID:               lesson.ClassID,
-			StudentID:             lesson.StudentID,
-			CourseID:              lesson.CourseID,
-			TeacherID:             req.TeacherID,
+			ClassID:               models.FlexString(fmt.Sprintf("%d", lesson.ClassID)),
+			StudentID:             models.FlexString(fmt.Sprintf("%d", lesson.StudentID)),
+			CourseID:              models.FlexString(fmt.Sprintf("%d", lesson.CourseID)),
+			TeacherID:             models.FlexString(req.TeacherID),
 			TeachingMode:          req.TeachingMode,
 			RequiresRoom:          requiresRoom,
-			RoomID:                roomID,
+			RoomID:                models.FlexString(fmt.Sprintf("%d", roomIDUint)),
 			AllowConflictOverride: req.AllowConflictOverride,
 			OverrideReason:        req.OverrideReason,
-			OperatorID:            operatorID,
+			OperatorID:            models.FlexString(fmt.Sprintf("%d", operatorID)),
 		})
 		if err != nil {
 			return err
@@ -353,10 +557,10 @@ func (s *EduScheduleService) RescheduleLesson(ctx context.Context, tenantID uint
 		lesson.LessonDate = &models.JSONTime{Time: truncateDate(newDate.Time)}
 		lesson.StartTime = req.StartTime
 		lesson.EndTime = req.EndTime
-		lesson.TeacherID = req.TeacherID
+		lesson.TeacherID = req.GetTeacherIDUint()
 		lesson.TeachingMode = strings.TrimSpace(req.TeachingMode)
 		lesson.RequiresRoom = requiresRoom
-		lesson.RoomID = roomID
+		lesson.RoomID = roomIDUint
 		lesson.IsManualAdjusted = 1
 		if err := tx.Save(&lesson).Error; err != nil {
 			return err
@@ -390,15 +594,15 @@ func (s *EduScheduleService) RescheduleLesson(ctx context.Context, tenantID uint
 }
 
 func (s *EduScheduleService) StopLesson(ctx context.Context, tenantID uint, req *models.EduLessonStopRequest) error {
-	return s.changeLessonStatus(ctx, tenantID, req.LessonID, "stopped", "stop", req.Reason, false)
+	return s.changeLessonStatus(ctx, tenantID, req.GetLessonIDUint(), "stopped", "stop", req.Reason, false)
 }
 
 func (s *EduScheduleService) CancelLesson(ctx context.Context, tenantID uint, req *models.EduLessonCancelRequest) error {
-	return s.changeLessonStatus(ctx, tenantID, req.LessonID, "canceled", "cancel", req.Reason, false)
+	return s.changeLessonStatus(ctx, tenantID, req.GetLessonIDUint(), "canceled", "cancel", req.Reason, false)
 }
 
 func (s *EduScheduleService) RestoreLesson(ctx context.Context, tenantID uint, req *models.EduLessonRestoreRequest) error {
-	return s.changeLessonStatus(ctx, tenantID, req.LessonID, "scheduled", "restore", req.Reason, true)
+	return s.changeLessonStatus(ctx, tenantID, req.GetLessonIDUint(), "scheduled", "restore", req.Reason, true)
 }
 
 func (s *EduScheduleService) MakeupLesson(ctx context.Context, tenantID uint, req *models.EduLessonMakeupRequest) (*models.EduLesson, error) {
@@ -430,17 +634,12 @@ func (s *EduScheduleService) MakeupLesson(ctx context.Context, tenantID uint, re
 	if err := validateLessonRoom(&models.EduScheduleRule{
 		TeachingMode: req.TeachingMode,
 		RequiresRoom: func() int8 {
-			if req.RoomID != nil && *req.RoomID != 0 {
+			if req.GetRoomID() != "" && req.GetRoomID() != "0" {
 				return 1
 			}
 			return 0
 		}(),
-		RoomID: func() uint {
-			if req.RoomID != nil {
-				return *req.RoomID
-			}
-			return 0
-		}(),
+		RoomID: req.GetRoomIDUint(),
 	}); err != nil {
 		return nil, err
 	}
@@ -448,7 +647,7 @@ func (s *EduScheduleService) MakeupLesson(ctx context.Context, tenantID uint, re
 	var created *models.EduLesson
 	err := app.DB().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var source models.EduLesson
-		if err := requireTenant(tx.Model(&models.EduLesson{}), tenantID).Where("id = ?", req.LessonID).First(&source).Error; err != nil {
+		if err := requireTenant(tx.Model(&models.EduLesson{}), tenantID).Where("id = ?", req.GetLessonIDUint()).First(&source).Error; err != nil {
 			return err
 		}
 
@@ -456,22 +655,20 @@ func (s *EduScheduleService) MakeupLesson(ctx context.Context, tenantID uint, re
 		if teachingMode == "" {
 			teachingMode = strings.TrimSpace(source.TeachingMode)
 		}
-		roomID := source.RoomID
+		roomIDUint := source.RoomID
 		requiresRoom := source.RequiresRoom
 		if strings.EqualFold(teachingMode, "offline") {
 			requiresRoom = 1
-			if req.RoomID != nil {
-				roomID = *req.RoomID
-			}
-			if roomID == 0 {
+			roomIDUint = req.GetRoomIDUint()
+			if roomIDUint == 0 {
 				return errors.New("线下课需要场地")
 			}
 		} else {
 			requiresRoom = 0
-			roomID = 0
+			roomIDUint = 0
 		}
 
-		teacherID := req.TeacherID
+		teacherID := req.GetTeacherIDUint()
 		if teacherID == 0 {
 			teacherID = source.TeacherID
 		}
@@ -486,18 +683,18 @@ func (s *EduScheduleService) MakeupLesson(ctx context.Context, tenantID uint, re
 		}
 
 		conflictResult, err := s.checkConflictsWithDB(ctx, tx, &models.EduScheduleConflictCheckRequest{
-			LessonID:     source.ID,
-			RuleID:       source.RuleID,
+			LessonID:     fmt.Sprintf("%d", source.ID),
+			RuleID:       models.FlexString(fmt.Sprintf("%d", source.RuleID)),
 			LessonDate:   req.LessonDate,
 			StartTime:    req.StartTime,
 			EndTime:      req.EndTime,
-			ClassID:      source.ClassID,
-			StudentID:    source.StudentID,
-			CourseID:     source.CourseID,
-			TeacherID:    teacherID,
+			ClassID:      models.FlexString(fmt.Sprintf("%d", source.ClassID)),
+			StudentID:    models.FlexString(fmt.Sprintf("%d", source.StudentID)),
+			CourseID:     models.FlexString(fmt.Sprintf("%d", source.CourseID)),
+			TeacherID:    models.FlexString(req.TeacherID),
 			TeachingMode: teachingMode,
 			RequiresRoom: requiresRoom,
-			RoomID:       roomID,
+			RoomID:       models.FlexString(fmt.Sprintf("%d", roomIDUint)),
 		})
 		if err != nil {
 			return err
@@ -519,7 +716,7 @@ func (s *EduScheduleService) MakeupLesson(ctx context.Context, tenantID uint, re
 			TeacherID:      teacherID,
 			TeachingMode:   teachingMode,
 			RequiresRoom:   requiresRoom,
-			RoomID:         roomID,
+			RoomID:         roomIDUint,
 			Status:         "scheduled",
 			SourceLessonID: source.ID,
 			CreatedBy:      source.CreatedBy,
@@ -542,7 +739,7 @@ func (s *EduScheduleService) MakeupLesson(ctx context.Context, tenantID uint, re
 			TeacherID:    teacherID,
 			TeachingMode: teachingMode,
 			RequiresRoom: requiresRoom,
-			RoomID:       roomID,
+			RoomID:       roomIDUint,
 			TenantID:     tenantID,
 		}); err != nil {
 			return err
@@ -626,18 +823,18 @@ func (s *EduScheduleService) changeLessonStatus(ctx context.Context, tenantID, l
 				return errors.New("当前课次状态不允许恢复")
 			}
 			conflictResult, err := s.checkConflictsWithDB(ctx, tx, &models.EduScheduleConflictCheckRequest{
-				LessonID:     lesson.ID,
-				RuleID:       lesson.RuleID,
+				LessonID:     fmt.Sprintf("%d", lesson.ID),
+				RuleID:       models.FlexString(fmt.Sprintf("%d", lesson.RuleID)),
 				LessonDate:   lesson.LessonDate,
 				StartTime:    lesson.StartTime,
 				EndTime:      lesson.EndTime,
-				ClassID:      lesson.ClassID,
-				StudentID:    lesson.StudentID,
-				CourseID:     lesson.CourseID,
-				TeacherID:    lesson.TeacherID,
+				ClassID:      models.FlexString(fmt.Sprintf("%d", lesson.ClassID)),
+				StudentID:    models.FlexString(fmt.Sprintf("%d", lesson.StudentID)),
+				CourseID:     models.FlexString(fmt.Sprintf("%d", lesson.CourseID)),
+				TeacherID:    models.FlexString(fmt.Sprintf("%d", lesson.TeacherID)),
 				TeachingMode: lesson.TeachingMode,
 				RequiresRoom: lesson.RequiresRoom,
-				RoomID:       lesson.RoomID,
+				RoomID:       models.FlexString(fmt.Sprintf("%d", lesson.RoomID)),
 			})
 			if err != nil {
 				return err
@@ -806,14 +1003,20 @@ func (s *EduScheduleService) buildLessonDates(ctx context.Context, rule *models.
 		if err != nil {
 			return nil, err
 		}
+		weekdays := weekdaySet(rule.Weekdays)
 		var dates []time.Time
 		for current := truncateDate(startDate); !current.After(endDate); current = current.AddDate(0, 0, 1) {
-			if int(current.Weekday()) == int(rule.Weekday)%7 && rule.Weekday > 0 {
-				if _, closed := closedDates[current.Format("2006-01-02")]; closed {
-					continue
-				}
-				dates = append(dates, current)
+			currentWeekday := int8(current.Weekday())
+			if currentWeekday == 0 {
+				currentWeekday = 7
 			}
+			if _, ok := weekdays[currentWeekday]; !ok {
+				continue
+			}
+			if _, closed := closedDates[current.Format("2006-01-02")]; closed {
+				continue
+			}
+			dates = append(dates, current)
 		}
 		return dates, nil
 	default:

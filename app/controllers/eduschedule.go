@@ -1,8 +1,6 @@
 package controllers
 
 import (
-	"strconv"
-
 	"gin-fast/app/models"
 	"gin-fast/app/service"
 
@@ -31,8 +29,8 @@ func (ctl *EduScheduleController) RuleList(c *gin.Context) {
 	if err != nil {
 		ctl.FailAndAbort(c, "统计排课规则数量失败", err)
 	}
-	list := models.NewEduScheduleRuleList()
-	if err := list.Find(c, req.Paginate(), scope); err != nil {
+	list, err := ctl.EduScheduleService.ListRulesWithWeekdays(c, tenantID, &req)
+	if err != nil {
 		ctl.FailAndAbort(c, "获取排课规则列表失败", err)
 	}
 	ctl.Success(c, gin.H{"list": list, "total": total})
@@ -67,7 +65,7 @@ func (ctl *EduScheduleController) RulePreviewChange(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	rows, err := ctl.EduScheduleService.PreviewRuleChange(c, ctl.RequireTenant(c), req.ID)
+	rows, err := ctl.EduScheduleService.PreviewRuleChange(c, ctl.RequireTenant(c), req.GetIDUint())
 	if err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
@@ -79,7 +77,7 @@ func (ctl *EduScheduleController) RuleDelete(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	if err := ctl.EduScheduleService.DeleteRule(c, ctl.RequireTenant(c), req.ID); err != nil {
+	if err := ctl.EduScheduleService.DeleteRule(c, ctl.RequireTenant(c), req.GetIDUint()); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
 	ctl.SuccessWithMessage(c, "排课规则删除成功", nil)
@@ -173,18 +171,12 @@ func (ctl *EduScheduleController) MakeupLesson(c *gin.Context) {
 
 func (ctl *EduScheduleController) LessonChangeLogs(c *gin.Context) {
 	var req models.EduLessonChangeLogListRequest
-	if id := c.Param("id"); id != "" {
-		lessonID, err := strconv.ParseUint(id, 10, 64)
-		if err != nil {
-			ctl.FailAndAbort(c, "课次ID格式错误", err)
-		}
-		req.LessonID = uint(lessonID)
-	}
+	req.LessonID = models.FlexString(c.Param("id"))
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
 	tenantID := ctl.RequireTenant(c)
-	logs, err := ctl.EduScheduleService.ListLessonChangeLogs(c, tenantID, req.LessonID)
+	logs, err := ctl.EduScheduleService.ListLessonChangeLogs(c, tenantID, req.GetLessonIDUint())
 	if err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
@@ -208,17 +200,17 @@ func buildEduScheduleRuleFromAddRequest(req *models.EduScheduleRuleAddRequest, t
 		Name:          req.Name,
 		RuleType:      req.RuleType,
 		RepeatType:    req.RepeatType,
-		TermID:        req.TermID,
+		TermID:        req.GetTermIDUint(),
 		StartDate:     req.StartDate,
 		EndDate:       req.EndDate,
-		ClassID:       req.ClassID,
-		StudentID:     req.StudentID,
-		CourseID:      req.CourseID,
-		TeacherID:     req.TeacherID,
+		ClassID:       req.GetClassIDUint(),
+		StudentID:     req.GetStudentIDUint(),
+		CourseID:      req.GetCourseIDUint(),
+		TeacherID:     req.GetTeacherIDUint(),
 		TeachingMode:  req.TeachingMode,
 		RequiresRoom:  req.RequiresRoom,
-		RoomID:        req.RoomID,
-		Weekday:       req.Weekday,
+		RoomID:        req.GetRoomIDUint(),
+		Weekdays:      append([]int8(nil), req.Weekdays...),
 		StartTime:     req.StartTime,
 		EndTime:       req.EndTime,
 		Status:        1,
@@ -229,17 +221,17 @@ func buildEduScheduleRuleFromAddRequest(req *models.EduScheduleRuleAddRequest, t
 		TenantID:      tenantID,
 	}
 	if req.Status != nil {
-		rule.Status = *req.Status
+		rule.Status = int8(*req.Status)
 	}
 	if req.Version != nil {
-		rule.Version = *req.Version
+		rule.Version = int(*req.Version)
 	}
 	return rule
 }
 
 func buildEduScheduleRuleFromUpdateRequest(req *models.EduScheduleRuleUpdateRequest, tenantID, userID uint) *models.EduScheduleRule {
 	rule := buildEduScheduleRuleFromAddRequest(&req.EduScheduleRuleAddRequest, tenantID, userID)
-	rule.BaseModel = models.BaseModel{ID: req.ID}
+	rule.BaseModel = models.BaseModel{ID: req.GetIDUint()}
 	return rule
 }
 
@@ -249,8 +241,8 @@ func buildEduScheduleRuleListScope(req *models.EduScheduleRuleListRequest, tenan
 		if req == nil {
 			return db
 		}
-		if req.ID != nil {
-			db = db.Where("id = ?", *req.ID)
+		if string(req.ID) != "" {
+			db = db.Where("id = ?", req.GetIDUint())
 		}
 		if req.Name != "" {
 			db = db.Where("name LIKE ?", "%"+req.Name+"%")
@@ -261,17 +253,17 @@ func buildEduScheduleRuleListScope(req *models.EduScheduleRuleListRequest, tenan
 		if req.RepeatType != "" {
 			db = db.Where("repeat_type = ?", req.RepeatType)
 		}
-		if req.ClassID != nil {
-			db = db.Where("class_id = ?", *req.ClassID)
+		if string(req.ClassID) != "" {
+			db = db.Where("class_id = ?", req.GetClassIDUint())
 		}
-		if req.StudentID != nil {
-			db = db.Where("student_id = ?", *req.StudentID)
+		if string(req.StudentID) != "" {
+			db = db.Where("student_id = ?", req.GetStudentIDUint())
 		}
-		if req.CourseID != nil {
-			db = db.Where("course_id = ?", *req.CourseID)
+		if string(req.CourseID) != "" {
+			db = db.Where("course_id = ?", req.GetCourseIDUint())
 		}
-		if req.TeacherID != nil {
-			db = db.Where("teacher_id = ?", *req.TeacherID)
+		if string(req.TeacherID) != "" {
+			db = db.Where("teacher_id = ?", req.GetTeacherIDUint())
 		}
 		if req.Status != nil {
 			db = db.Where("status = ?", *req.Status)
@@ -286,23 +278,23 @@ func buildEduScheduleLessonListScope(req *models.EduLessonListRequest, tenantID 
 		if req == nil {
 			return db
 		}
-		if req.ID != nil {
-			db = db.Where("id = ?", *req.ID)
+		if string(req.ID) != "" {
+			db = db.Where("id = ?", req.GetIDUint())
 		}
-		if req.RuleID != nil {
-			db = db.Where("rule_id = ?", *req.RuleID)
+		if string(req.RuleID) != "" {
+			db = db.Where("rule_id = ?", req.GetRuleIDUint())
 		}
-		if req.ClassID != nil {
-			db = db.Where("class_id = ?", *req.ClassID)
+		if string(req.ClassID) != "" {
+			db = db.Where("class_id = ?", req.GetClassIDUint())
 		}
-		if req.StudentID != nil {
-			db = db.Where("student_id = ?", *req.StudentID)
+		if string(req.StudentID) != "" {
+			db = db.Where("student_id = ?", req.GetStudentIDUint())
 		}
-		if req.CourseID != nil {
-			db = db.Where("course_id = ?", *req.CourseID)
+		if string(req.CourseID) != "" {
+			db = db.Where("course_id = ?", req.GetCourseIDUint())
 		}
-		if req.TeacherID != nil {
-			db = db.Where("teacher_id = ?", *req.TeacherID)
+		if string(req.TeacherID) != "" {
+			db = db.Where("teacher_id = ?", req.GetTeacherIDUint())
 		}
 		if req.Status != "" {
 			db = db.Where("status = ?", req.Status)

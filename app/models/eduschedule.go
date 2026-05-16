@@ -23,7 +23,7 @@ type EduScheduleRule struct {
 	TeachingMode  string    `gorm:"column:teaching_mode;size:32;default:'offline';comment:授课方式 offline/online/home" json:"teachingMode"`
 	RequiresRoom  int8      `gorm:"column:requires_room;default:1;comment:是否需要场地" json:"requiresRoom"`
 	RoomID        uint      `gorm:"column:room_id;default:0;comment:场地ID" json:"roomId"`
-	Weekday       int8      `gorm:"column:weekday;default:0;comment:星期 1-7" json:"weekday"`
+	Weekdays      []int8    `gorm:"-" json:"weekdays"`
 	StartTime     string    `gorm:"column:start_time;size:16;not null;comment:开始时间" json:"startTime"`
 	EndTime       string    `gorm:"column:end_time;size:16;not null;comment:结束时间" json:"endTime"`
 	Status        int8      `gorm:"column:status;default:1;comment:状态" json:"status"`

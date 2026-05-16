@@ -50,7 +50,7 @@ func (ctl *EduTermController) Add(c *gin.Context) {
 		TenantID:  ctl.RequireTenant(c),
 	}
 	if req.Status != nil {
-		term.Status = *req.Status
+		term.Status = int8(*req.Status)
 	}
 	if err := ctl.EduTermService.Create(c, term); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
@@ -64,7 +64,7 @@ func (ctl *EduTermController) Update(c *gin.Context) {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
 	term := &models.EduTerm{
-		BaseModel: models.BaseModel{ID: req.ID},
+		BaseModel: models.BaseModel{ID: uint(req.ID)},
 		Name:      req.Name,
 		StartDate: req.StartDate,
 		EndDate:   req.EndDate,
@@ -73,7 +73,7 @@ func (ctl *EduTermController) Update(c *gin.Context) {
 		TenantID:  ctl.RequireTenant(c),
 	}
 	if req.Status != nil {
-		term.Status = *req.Status
+		term.Status = int8(*req.Status)
 	}
 	if err := ctl.EduTermService.Update(c, term); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
@@ -86,7 +86,7 @@ func (ctl *EduTermController) Delete(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	if err := ctl.EduTermService.Delete(c, ctl.RequireTenant(c), req.ID); err != nil {
+	if err := ctl.EduTermService.Delete(c, ctl.RequireTenant(c), uint(req.ID)); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
 	ctl.SuccessWithMessage(c, "学期删除成功", nil)
@@ -113,7 +113,16 @@ func (ctl *EduTermController) SaveClosedDays(c *gin.Context) {
 	if err != nil {
 		ctl.FailAndAbort(c, "学期ID格式错误", err)
 	}
-	if err := ctl.EduTermService.SaveClosedDays(c, ctl.RequireTenant(c), termID, req.Rows); err != nil {
+	rows := make([]models.EduTermClosedDay, 0, len(req.Rows))
+	for _, row := range req.Rows {
+		rows = append(rows, models.EduTermClosedDay{
+			BaseModel:  models.BaseModel{ID: uint(row.ID)},
+			TermID:     uint(row.TermID),
+			ClosedDate: row.ClosedDate,
+			Reason:     row.Reason,
+		})
+	}
+	if err := ctl.EduTermService.SaveClosedDays(c, ctl.RequireTenant(c), termID, rows); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
 	ctl.SuccessWithMessage(c, "学期停课日保存成功", nil)

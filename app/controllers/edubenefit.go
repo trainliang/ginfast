@@ -65,10 +65,21 @@ func (ctl *EduBenefitController) DeleteProduct(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	if err := ctl.EduBenefitService.DeleteProduct(c, ctl.RequireTenant(c), req.ID); err != nil {
+	if err := ctl.EduBenefitService.DeleteProduct(c, ctl.RequireTenant(c), uint(req.ID)); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
 	ctl.SuccessWithMessage(c, "权益产品删除成功", nil)
+}
+
+func (ctl *EduBenefitController) ProductOptions(c *gin.Context) {
+	tenantID := ctl.GetCurrentTenantID(c)
+	list := models.NewEduBenefitProductList()
+	if err := list.Find(c, func(db *gorm.DB) *gorm.DB {
+		return db.Where("tenant_id = ? AND status = ?", tenantID, 1).Order("id desc")
+	}); err != nil {
+		ctl.FailAndAbort(c, "获取权益产品选项失败", err)
+	}
+	ctl.Success(c, gin.H{"list": list})
 }
 
 func (ctl *EduBenefitController) StudentBenefitList(c *gin.Context) {
@@ -182,7 +193,7 @@ func (ctl *EduBenefitController) RetryExternalSync(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
-	if err := ctl.EduBenefitService.RetryExternalSync(c, ctl.RequireTenant(c), req.ID); err != nil {
+	if err := ctl.EduBenefitService.RetryExternalSync(c, ctl.RequireTenant(c), uint(req.ID)); err != nil {
 		ctl.FailAndAbort(c, err.Error(), err)
 	}
 	ctl.SuccessWithMessage(c, "外部同步任务已加入重试", nil)
@@ -194,86 +205,86 @@ func buildBenefitProductFromAddRequest(req *models.EduBenefitProductAddRequest, 
 		Code:            req.Code,
 		BenefitType:     req.BenefitType,
 		CalculationMode: req.CalculationMode,
-		TotalCount:      req.TotalCount,
-		ValidDays:       req.ValidDays,
+		TotalCount:      int(req.TotalCount),
+		ValidDays:       int(req.ValidDays),
 		Status:          1,
 		Remark:          req.Remark,
 		CreatedBy:       userID,
 		TenantID:        tenantID,
 	}
 	if req.Status != nil {
-		product.Status = *req.Status
+		product.Status = int8(*req.Status)
 	}
 	return product
 }
 
 func buildBenefitProductFromUpdateRequest(req *models.EduBenefitProductUpdateRequest, tenantID, userID uint) *models.EduBenefitProduct {
 	product := &models.EduBenefitProduct{
-		BaseModel:       models.BaseModel{ID: req.ID},
+		BaseModel:       models.BaseModel{ID: uint(req.ID)},
 		Name:            req.Name,
 		Code:            req.Code,
 		BenefitType:     req.BenefitType,
 		CalculationMode: req.CalculationMode,
-		TotalCount:      req.TotalCount,
-		ValidDays:       req.ValidDays,
+		TotalCount:      int(req.TotalCount),
+		ValidDays:       int(req.ValidDays),
 		Status:          1,
 		Remark:          req.Remark,
 		CreatedBy:       userID,
 		TenantID:        tenantID,
 	}
 	if req.Status != nil {
-		product.Status = *req.Status
+		product.Status = int8(*req.Status)
 	}
 	return product
 }
 
 func buildStudentBenefitFromAddRequest(req *models.EduStudentBenefitAddRequest, tenantID, userID uint) *models.EduStudentBenefit {
 	benefit := &models.EduStudentBenefit{
-		StudentID:       req.StudentID,
-		ProductID:       req.ProductID,
+		StudentID:       uint(req.StudentID),
+		ProductID:       uint(req.ProductID),
 		BenefitType:     req.BenefitType,
 		CalculationMode: req.CalculationMode,
-		CourseID:        req.CourseID,
-		ClassID:         req.ClassID,
-		TeacherID:       req.TeacherID,
+		CourseID:        uint(req.CourseID),
+		ClassID:         uint(req.ClassID),
+		TeacherID:       uint(req.TeacherID),
 		ValidFrom:       req.ValidFrom,
 		ValidTo:         req.ValidTo,
-		TotalCount:      req.TotalCount,
-		UsedCount:       req.UsedCount,
-		RemainingCount:  req.RemainingCount,
+		TotalCount:      int(req.TotalCount),
+		UsedCount:       int(req.UsedCount),
+		RemainingCount:  int(req.RemainingCount),
 		Status:          1,
 		SourceType:      req.SourceType,
 		TenantID:        tenantID,
 		CreatedBy:       userID,
 	}
 	if req.Status != nil {
-		benefit.Status = *req.Status
+		benefit.Status = int8(*req.Status)
 	}
 	return benefit
 }
 
 func buildStudentBenefitFromUpdateRequest(req *models.EduStudentBenefitUpdateRequest, tenantID, userID uint) *models.EduStudentBenefit {
 	benefit := &models.EduStudentBenefit{
-		BaseModel:       models.BaseModel{ID: req.ID},
-		StudentID:       req.StudentID,
-		ProductID:       req.ProductID,
+		BaseModel:       models.BaseModel{ID: uint(req.ID)},
+		StudentID:       uint(req.StudentID),
+		ProductID:       uint(req.ProductID),
 		BenefitType:     req.BenefitType,
 		CalculationMode: req.CalculationMode,
-		CourseID:        req.CourseID,
-		ClassID:         req.ClassID,
-		TeacherID:       req.TeacherID,
+		CourseID:        uint(req.CourseID),
+		ClassID:         uint(req.ClassID),
+		TeacherID:       uint(req.TeacherID),
 		ValidFrom:       req.ValidFrom,
 		ValidTo:         req.ValidTo,
-		TotalCount:      req.TotalCount,
-		UsedCount:       req.UsedCount,
-		RemainingCount:  req.RemainingCount,
+		TotalCount:      int(req.TotalCount),
+		UsedCount:       int(req.UsedCount),
+		RemainingCount:  int(req.RemainingCount),
 		Status:          1,
 		SourceType:      req.SourceType,
 		TenantID:        tenantID,
 		CreatedBy:       userID,
 	}
 	if req.Status != nil {
-		benefit.Status = *req.Status
+		benefit.Status = int8(*req.Status)
 	}
 	return benefit
 }

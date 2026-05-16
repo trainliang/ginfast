@@ -13,32 +13,33 @@ import (
 	"gin-fast/app/middleware"
 )
 
-var userControllers = controllers.NewUserController()                       // 用户控制器
-var authControllers = controllers.NewAuthController()                       // 认证控制器
-var sysMenuControllers = controllers.NewSysMenuController()                 // 菜单控制器
-var sysDepartmentControllers = controllers.NewSysDepartmentController()     // 部门控制器
-var sysRoleControllers = controllers.NewSysRoleController()                 // 角色控制器
-var sysDictControllers = controllers.NewSysDictController()                 // 字典控制器
-var sysDictItemControllers = controllers.NewSysDictItemController()         // 字典项控制器
-var sysApiControllers = controllers.NewSysApiController()                   // API控制器
-var sysAffixControllers = controllers.NewSysAffixController()               // 文件管理
-var configControllers = controllers.NewConfigController()                   // 配置控制器
-var sysOperationLogControllers = controllers.NewSysOperationLogController() // 操作日志控制器
-var sysTenantControllers = controllers.NewTenantController()                // 租户控制器
-var sysUserTenantControllers = controllers.NewSysUserTenantController()     // 用户租户关联控制器
-var codeGenControllers = controllers.NewCodeGenController()                 // 代码生成控制器
-var sysGenControllers = controllers.NewSysGenController()                   // 代码生成配置控制器
-var pluginsManagerControllers = controllers.NewPluginsManagerController()   // 插件管理控制器
-var sysJobsControllers = controllers.NewSysJobsController()                 // 定时任务控制器
-var sysJobResultsControllers = controllers.NewSysJobResultsController()     // 定时任务执行结果控制器
-var eduStudentControllers = controllers.NewEduStudentController()           // 教培学生控制器
-var eduCourseControllers = controllers.NewEduCourseController()             // 教培课程/项目控制器
-var eduClassControllers = controllers.NewEduClassController()               // 教培班级控制器
-var eduRoomControllers = controllers.NewEduRoomController()                 // 教培教室/场地控制器
-var eduTermControllers = controllers.NewEduTermController()                 // 教培学期控制器
-var eduBenefitControllers = controllers.NewEduBenefitController()           // 教培权益中心控制器
-var eduScheduleControllers = controllers.NewEduScheduleController()         // 教培排课控制器
-var eduStatisticsControllers = controllers.NewEduStatisticsController()     // 教培统计控制器
+var userControllers = controllers.NewUserController()                               // 用户控制器
+var authControllers = controllers.NewAuthController()                               // 认证控制器
+var sysMenuControllers = controllers.NewSysMenuController()                         // 菜单控制器
+var sysDepartmentControllers = controllers.NewSysDepartmentController()             // 部门控制器
+var sysRoleControllers = controllers.NewSysRoleController()                         // 角色控制器
+var sysDictControllers = controllers.NewSysDictController()                         // 字典控制器
+var sysDictItemControllers = controllers.NewSysDictItemController()                 // 字典项控制器
+var sysApiControllers = controllers.NewSysApiController()                           // API控制器
+var sysAffixControllers = controllers.NewSysAffixController()                       // 文件管理
+var configControllers = controllers.NewConfigController()                           // 配置控制器
+var sysOperationLogControllers = controllers.NewSysOperationLogController()         // 操作日志控制器
+var sysTenantControllers = controllers.NewTenantController()                        // 租户控制器
+var sysUserTenantControllers = controllers.NewSysUserTenantController()             // 用户租户关联控制器
+var codeGenControllers = controllers.NewCodeGenController()                         // 代码生成控制器
+var sysGenControllers = controllers.NewSysGenController()                           // 代码生成配置控制器
+var pluginsManagerControllers = controllers.NewPluginsManagerController()           // 插件管理控制器
+var sysJobsControllers = controllers.NewSysJobsController()                         // 定时任务控制器
+var sysJobResultsControllers = controllers.NewSysJobResultsController()             // 定时任务执行结果控制器
+var eduStudentControllers = controllers.NewEduStudentController()                   // 教培学生控制器
+var eduCourseControllers = controllers.NewEduCourseController()                     // 教培课程/项目控制器
+var eduClassControllers = controllers.NewEduClassController()                       // 教培班级控制器
+var eduRoomControllers = controllers.NewEduRoomController()                         // 教培教室/场地控制器
+var eduTermControllers = controllers.NewEduTermController()                         // 教培学期控制器
+var eduBenefitControllers = controllers.NewEduBenefitController()                   // 教培权益中心控制器
+var eduScheduleControllers = controllers.NewEduScheduleController()                 // 教培排课控制器
+var eduStatisticsControllers = controllers.NewEduStatisticsController()             // 教培统计控制器
+var eduLessonCompletionControllers = controllers.NewEduLessonCompletionController() // 教培消课控制器
 
 // InitRoutes 初始化路由
 func InitRoutes(engine *gin.Engine) {
@@ -230,6 +231,7 @@ func InitRoutes(engine *gin.Engine) {
 				students := edu.Group("/students")
 				{
 					students.GET("/list", eduStudentControllers.List)
+					students.GET("/options", eduStudentControllers.Options)
 					students.GET("/export", eduStudentControllers.Export)
 					students.GET("/:id", eduStudentControllers.GetByID)
 					students.POST("/add", eduStudentControllers.Add)
@@ -253,6 +255,7 @@ func InitRoutes(engine *gin.Engine) {
 				classes := edu.Group("/classes")
 				{
 					classes.GET("/list", eduClassControllers.List)
+					classes.GET("/options", eduClassControllers.Options)
 					classes.GET("/teacher-options", eduClassControllers.TeacherOptions)
 					classes.GET("/teacher-role-config", eduClassControllers.TeacherRoleConfig)
 					classes.PUT("/teacher-role-config", eduClassControllers.SaveTeacherRoleConfig)
@@ -303,6 +306,7 @@ func InitRoutes(engine *gin.Engine) {
 				benefitProducts := edu.Group("/benefit-products")
 				{
 					benefitProducts.GET("/list", eduBenefitControllers.ProductList)
+					benefitProducts.GET("/options", eduBenefitControllers.ProductOptions)
 					benefitProducts.POST("/add", eduBenefitControllers.AddProduct)
 					benefitProducts.PUT("/edit", eduBenefitControllers.UpdateProduct)
 					benefitProducts.DELETE("/delete", eduBenefitControllers.DeleteProduct)
@@ -335,6 +339,12 @@ func InitRoutes(engine *gin.Engine) {
 					statistics.GET("/external-sync", eduStatisticsControllers.ExternalSync)
 				}
 
+				lessonCompletion := edu.Group("/lesson-completion")
+				{
+					lessonCompletion.GET("/rules", eduLessonCompletionControllers.Rules)
+					lessonCompletion.PUT("/rules", eduLessonCompletionControllers.SaveRules)
+				}
+
 				scheduleRules := edu.Group("/schedule-rules")
 				{
 					scheduleRules.GET("/list", eduScheduleControllers.RuleList)
@@ -354,6 +364,10 @@ func InitRoutes(engine *gin.Engine) {
 					lessons.PUT("/restore", eduScheduleControllers.RestoreLesson)
 					lessons.POST("/makeup", eduScheduleControllers.MakeupLesson)
 					lessons.GET("/:id/change-logs", eduScheduleControllers.LessonChangeLogs)
+					lessons.GET("/:id/completions", eduLessonCompletionControllers.Completions)
+					lessons.POST("/:id/completions", eduLessonCompletionControllers.SubmitCompletions)
+					lessons.POST("/:id/completions/:studentId/revoke", eduLessonCompletionControllers.RevokeCompletion)
+					lessons.POST("/:id/complete", eduLessonCompletionControllers.CompleteLesson)
 				}
 
 				schedules := edu.Group("/schedules")
