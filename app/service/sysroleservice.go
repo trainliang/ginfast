@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"gin-fast/app/global/app"
 	"gin-fast/app/models"
+	"gin-fast/app/utils/tenanthelper"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -21,10 +22,16 @@ func NewSysRoleService() *SysRoleService {
 }
 
 func (s *SysRoleService) Update(c *gin.Context, req models.SysRoleUpdateRequest) (*models.SysRole, error) {
+	tenantCtx, err := tenanthelper.FromGinContext(c)
+	if err != nil || tenantCtx.EffectiveTenantID == 0 {
+		return nil, fmt.Errorf("当前处于平台态，禁止维护租户角色")
+	}
+	tenantID := tenantCtx.EffectiveTenantID
+
 	// 检查角色名称是否与其他角色冲突（排除当前角色）
 	existRole := models.NewSysRole()
-	err := existRole.Find(c, func(d *gorm.DB) *gorm.DB {
-		return d.Where("name = ? AND id != ?", req.Name, req.ID)
+	err = existRole.Find(c, func(d *gorm.DB) *gorm.DB {
+		return d.Where("name = ? AND id != ? AND tenant_id = ?", req.Name, req.ID, tenantID)
 	})
 	if err != nil {
 		return nil, err
@@ -40,7 +47,7 @@ func (s *SysRoleService) Update(c *gin.Context, req models.SysRoleUpdateRequest)
 		}
 		parentRole := models.NewSysRole()
 		err := parentRole.Find(c, func(d *gorm.DB) *gorm.DB {
-			return d.Where("id = ?", req.ParentID)
+			return d.Where("id = ? AND tenant_id = ?", req.ParentID, tenantID)
 		})
 		if err != nil {
 			return nil, err
@@ -49,7 +56,7 @@ func (s *SysRoleService) Update(c *gin.Context, req models.SysRoleUpdateRequest)
 			return nil, fmt.Errorf("父级角色不存在")
 		}
 		// 检查是否会形成循环引用
-		if err := s.checkCircularReference(c, req.ID, req.ParentID); err != nil {
+		if err := s.checkCircularReference(c, tenantID, req.ID, req.ParentID); err != nil {
 			return nil, err
 		}
 	}
@@ -57,7 +64,7 @@ func (s *SysRoleService) Update(c *gin.Context, req models.SysRoleUpdateRequest)
 	// 更新角色信息
 	role := models.NewSysRole()
 	err = role.Find(c, func(d *gorm.DB) *gorm.DB {
-		return d.Where("id = ?", req.ID)
+		return d.Where("id = ? AND tenant_id = ?", req.ID, tenantID)
 	})
 	if err != nil {
 		return nil, err
@@ -84,7 +91,7 @@ func (s *SysRoleService) Update(c *gin.Context, req models.SysRoleUpdateRequest)
 }
 
 // checkCircularReference 检查是否存在循环引用
-func (s *SysRoleService) checkCircularReference(c *gin.Context, currentRoleID uint, parentID uint) error {
+func (s *SysRoleService) checkCircularReference(c *gin.Context, tenantID uint, currentRoleID uint, parentID uint) error {
 	if parentID == 0 {
 		return nil // 如果父级ID为0，不需要检查
 	}
@@ -92,7 +99,7 @@ func (s *SysRoleService) checkCircularReference(c *gin.Context, currentRoleID ui
 	// 获取所有角色用于构建角色树
 	allRoles := models.NewSysRoleList()
 	err := allRoles.Find(c, func(db *gorm.DB) *gorm.DB {
-		return db
+		return db.Where("tenant_id = ?", tenantID)
 	})
 	if err != nil {
 		return err

@@ -52,6 +52,9 @@ func (sc *SysRoleController) GetUserPermission(c *gin.Context) {
 	if err != nil {
 		sc.FailAndAbort(c, "Invalid role ID", err)
 	}
+	if _, err = requireRoleInCurrentTenant(c, uint(roleId)); err != nil {
+		sc.FailAndAbort(c, err.Error(), err)
+	}
 	sysRoleMenuList := models.NewSysRoleMenuList()
 	err = sysRoleMenuList.Find(c, func(d *gorm.DB) *gorm.DB {
 		return d.Where("role_id = ?", roleId)
@@ -151,15 +154,9 @@ func (sc *SysRoleController) GetByID(c *gin.Context) {
 	}
 
 	// 查询角色信息
-	role := models.NewSysRole()
-	err = role.Find(c, func(d *gorm.DB) *gorm.DB {
-		return d.Where("id = ?", uint(id))
-	})
+	role, err := requireRoleInCurrentTenant(c, uint(id))
 	if err != nil {
 		sc.FailAndAbort(c, "查询角色失败", err)
-	}
-	if role.IsEmpty() {
-		sc.FailAndAbort(c, "角色不存在", nil)
 	}
 
 	sc.Success(c, role)
@@ -182,11 +179,16 @@ func (sc *SysRoleController) Add(c *gin.Context) {
 	if err := req.Validate(c); err != nil {
 		sc.FailAndAbort(c, err.Error(), err)
 	}
+	tenantCtx, err := tenanthelper.FromGinContext(c)
+	if err != nil || tenantCtx.EffectiveTenantID == 0 {
+		sc.FailAndAbort(c, "当前处于平台态，禁止维护租户角色", err)
+	}
+	tenantID := tenantCtx.EffectiveTenantID
 
 	// 检查角色名称是否已存在
 	existRole := models.NewSysRole()
-	err := existRole.Find(c, func(d *gorm.DB) *gorm.DB {
-		return d.Where("name = ?", req.Name)
+	err = existRole.Find(c, func(d *gorm.DB) *gorm.DB {
+		return d.Where("name = ? AND tenant_id = ?", req.Name, tenantID)
 	})
 	if err != nil {
 		sc.FailAndAbort(c, "检查角色名称失败", err)
@@ -199,7 +201,7 @@ func (sc *SysRoleController) Add(c *gin.Context) {
 	if req.ParentID > 0 {
 		parentRole := models.NewSysRole()
 		err := parentRole.Find(c, func(d *gorm.DB) *gorm.DB {
-			return d.Where("id = ?", req.ParentID)
+			return d.Where("id = ? AND tenant_id = ?", req.ParentID, tenantID)
 		})
 		if err != nil {
 			sc.FailAndAbort(c, "检查父级角色失败", err)
@@ -216,6 +218,7 @@ func (sc *SysRoleController) Add(c *gin.Context) {
 	role.Status = req.Status
 	role.Description = req.Description
 	role.ParentID = req.ParentID
+	role.TenantID = tenantID
 
 	err = app.DB().WithContext(c).Create(role).Error
 	if err != nil {
@@ -275,21 +278,15 @@ func (sc *SysRoleController) Delete(c *gin.Context) {
 	}
 
 	// 检查角色是否存在
-	role := models.NewSysRole()
-	err := role.Find(c, func(d *gorm.DB) *gorm.DB {
-		return d.Where("id = ?", req.ID)
-	})
+	role, err := requireRoleInCurrentTenant(c, req.ID)
 	if err != nil {
 		sc.FailAndAbort(c, "查询角色失败", err)
-	}
-	if role.IsEmpty() {
-		sc.FailAndAbort(c, "角色不存在", nil)
 	}
 
 	// 检查是否有子角色
 	childRoles := models.NewSysRoleList()
 	err = childRoles.Find(c, func(d *gorm.DB) *gorm.DB {
-		return d.Where("parent_id = ?", req.ID)
+		return d.Where("parent_id = ? AND tenant_id = ?", req.ID, role.TenantID)
 	})
 	if err != nil {
 		sc.FailAndAbort(c, "检查子角色失败", err)
@@ -316,7 +313,7 @@ func (sc *SysRoleController) Delete(c *gin.Context) {
 		}
 
 		// 软删除角色
-		if err := tx.Where("id = ?", req.ID).Delete(role).Error; err != nil {
+		if err := tx.Where("id = ? AND tenant_id = ?", req.ID, role.TenantID).Delete(role).Error; err != nil {
 			return err
 		}
 
@@ -356,15 +353,9 @@ func (sm *SysRoleController) AddRoleMenu(c *gin.Context) {
 	}
 
 	// 检查角色是否存在
-	role := models.NewSysRole()
-	err := role.Find(c, func(d *gorm.DB) *gorm.DB {
-		return d.Where("id = ?", req.RoleID)
-	})
+	_, err := requireRoleInCurrentTenant(c, req.RoleID)
 	if err != nil {
 		sm.FailAndAbort(c, "查询角色失败", err)
-	}
-	if role.IsEmpty() {
-		sm.FailAndAbort(c, "角色不存在", nil)
 	}
 
 	// 检查菜单ID是否存在 - 优化为批量查询
@@ -446,15 +437,9 @@ func (sc *SysRoleController) UpdateDataScope(c *gin.Context) {
 	}
 
 	// 检查角色是否存在
-	role := models.NewSysRole()
-	err := role.Find(c, func(d *gorm.DB) *gorm.DB {
-		return d.Where("id = ?", req.ID)
-	})
+	role, err := requireRoleInCurrentTenant(c, req.ID)
 	if err != nil {
 		sc.FailAndAbort(c, "查询角色失败", err)
-	}
-	if role.IsEmpty() {
-		sc.FailAndAbort(c, "角色不存在", nil)
 	}
 
 	// 更新数据权限字段
@@ -467,4 +452,22 @@ func (sc *SysRoleController) UpdateDataScope(c *gin.Context) {
 	}
 
 	sc.SuccessWithMessage(c, "角色数据权限更新成功", role)
+}
+
+func requireRoleInCurrentTenant(c *gin.Context, roleID uint) (*models.SysRole, error) {
+	tenantCtx, err := tenanthelper.FromGinContext(c)
+	if err != nil || tenantCtx.EffectiveTenantID == 0 {
+		return nil, fmt.Errorf("当前处于平台态，禁止维护租户角色")
+	}
+	role := models.NewSysRole()
+	err = role.Find(c, func(d *gorm.DB) *gorm.DB {
+		return d.Where("id = ? AND tenant_id = ?", roleID, tenantCtx.EffectiveTenantID)
+	})
+	if err != nil {
+		return nil, err
+	}
+	if role.IsEmpty() {
+		return nil, fmt.Errorf("角色不存在")
+	}
+	return role, nil
 }
