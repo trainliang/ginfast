@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"gin-fast/app/models"
+	"gin-fast/app/utils/tenanthelper"
 
 	"gorm.io/gorm"
 )
@@ -17,10 +18,16 @@ func NewSysDepartmentService() *SysDepartmentService {
 }
 
 func (s *SysDepartmentService) Update(c context.Context, req *models.SysDepartmentUpdateRequest) (*models.SysDepartment, error) {
+	tenantCtx, err := tenanthelper.RequireBusinessTenant(c)
+	if err != nil {
+		return nil, err
+	}
+	tenantID := tenantCtx.EffectiveTenantID
+
 	// 检查部门是否存在
 	dept := models.NewSysDepartment()
-	err := dept.Find(c, func(d *gorm.DB) *gorm.DB {
-		return d.Where("id = ?", req.ID)
+	err = dept.Find(c, func(d *gorm.DB) *gorm.DB {
+		return d.Where("id = ? AND tenant_id = ?", req.ID, tenantID)
 	})
 	if err != nil {
 		return nil, err
@@ -32,7 +39,7 @@ func (s *SysDepartmentService) Update(c context.Context, req *models.SysDepartme
 	// 检查部门名称是否与其他部门冲突（排除当前部门）
 	existDept := models.NewSysDepartment()
 	err = existDept.Find(c, func(d *gorm.DB) *gorm.DB {
-		return d.Where("name = ? AND id != ?", req.Name, req.ID)
+		return d.Where("name = ? AND id != ? AND tenant_id = ?", req.Name, req.ID, tenantID)
 	})
 	if err != nil {
 		return nil, err
@@ -48,7 +55,7 @@ func (s *SysDepartmentService) Update(c context.Context, req *models.SysDepartme
 		}
 		parentDept := models.NewSysDepartment()
 		err := parentDept.Find(c, func(d *gorm.DB) *gorm.DB {
-			return d.Where("id = ?", *req.ParentID)
+			return d.Where("id = ? AND tenant_id = ?", *req.ParentID, tenantID)
 		})
 		if err != nil {
 			return nil, err
@@ -57,7 +64,7 @@ func (s *SysDepartmentService) Update(c context.Context, req *models.SysDepartme
 			return nil, errors.New("父级部门不存在")
 		}
 		// 检查是否会形成循环引用
-		if err := s.checkCircularReference(c, req.ID, *req.ParentID); err != nil {
+		if err := s.checkCircularReference(c, tenantID, req.ID, *req.ParentID); err != nil {
 			return nil, err
 		}
 	}
@@ -80,7 +87,7 @@ func (s *SysDepartmentService) Update(c context.Context, req *models.SysDepartme
 }
 
 // checkCircularReference 检查是否存在循环引用
-func (s *SysDepartmentService) checkCircularReference(c context.Context, currentDeptID uint, parentID uint) error {
+func (s *SysDepartmentService) checkCircularReference(c context.Context, tenantID uint, currentDeptID uint, parentID uint) error {
 	if parentID == 0 {
 		return nil // 如果父级ID为0，不需要检查
 	}
@@ -88,7 +95,7 @@ func (s *SysDepartmentService) checkCircularReference(c context.Context, current
 	// 获取所有部门用于构建部门树
 	allDepts := models.NewSysDepartmentList()
 	err := allDepts.Find(c, func(db *gorm.DB) *gorm.DB {
-		return db
+		return db.Where("tenant_id = ?", tenantID)
 	})
 	if err != nil {
 		return err
